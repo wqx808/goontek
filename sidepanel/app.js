@@ -1,0 +1,532 @@
+// Side panel controller.
+//
+// Each tab owns an <iframe>, created lazily and kept alive for the life of the
+// tab, so switching tabs preserves scroll position and page state. Tab state
+// lives in chrome.storage.session, which the browser discards on shutdown.
+
+const $ = (id) => document.getElementById(id);
+
+const stage = $("stage");
+const empty = $("empty");
+const urlInput = $("url");
+const omni = $("omni");
+const tabsEl = $("tabs");
+const toastEl = $("toast");
+
+const CONFIG_KEY = "goontek:config";
+const SESSION_KEY = "goontek:session";
+const MAX_TABS = 8;
+
+// Favourites are the only state that outlives a session: storage.local, on
+// disk, untouched by hide. Mobile emulation and ad blocking have no settings;
+// the service worker owns both.
+let config = { volume: 1, muted: false, favourites: [] };
+let minimized = false;
+let tabs = []; // [{ id, url }]
+let activeId = null;
+let visited = []; // URLs touched this session, for `clear history`
+let nextId = 1;
+
+/** id -> HTMLIFrameElement */
+const frames = new Map();
+
+init();
+
+async function init() {
+  const stored = (await chrome.storage.local.get(CONFIG_KEY))[CONFIG_KEY] || {};
+  config = { ...config, ...stored };
+
+  const saved = (await chrome.storage.session.get(SESSION_KEY))[SESSION_KEY];
+  if (saved) {
+    tabs = saved.tabs || [];
+    activeId = saved.activeId ?? null;
+    visited = saved.visited || [];
+    nextId = saved.nextId || tabs.length + 1;
+  }
+  if (tabs.length === 0) newTab({ focus: false });
+
+  renderVolume();
+  renderFavourites();
+  renderTabs();
+  showActive();
+  urlInput.focus();
+}
+
+// ---------------------------------------------------------------- tabs
+
+function newTab({ url = "", focus = true } = {}) {
+  if (tabs.length >= MAX_TABS) {
+    toast(`Tab limit is ${MAX_TABS}`);
+    return null;
+  }
+  const tab = { id: nextId++, url };
+  tabs.push(tab);
+  activeId = tab.id;
+  if (url) {
+    navigate(url);
+  } else {
+    saveSession();
+    renderTabs();
+    showActive();
+  }
+  if (focus) urlInput.focus();
+  return tab;
+}
+
+function closeTab(id) {
+  const i = tabs.findIndex((t) => t.id === id);
+  if (i === -1) return;
+
+  destroyFrame(id);
+  tabs.splice(i, 1);
+
+  if (activeId === id) {
+    const next = tabs[i] || tabs[i - 1];
+    activeId = next ? next.id : null;
+  }
+  if (tabs.length === 0) newTab({ focus: false });
+
+  saveSession();
+  renderTabs();
+  showActive();
+}
+
+function activate(id) {
+  activeId = id;
+  saveSession();
+  renderTabs();
+  showActive();
+}
+
+function activeTab() {
+  return tabs.find((t) => t.id === activeId) || null;
+}
+
+function renderTabs() {
+  tabsEl.textContent = "";
+  for (const tab of tabs) {
+    const el = document.createElement("div");
+    el.className = "tab";
+    el.setAttribute("role", "tab");
+    el.setAttribute("aria-selected", String(tab.id === activeId));
+
+    const label = document.createElement("button");
+    label.type = "button";
+    label.className = "tab-label";
+    label.textContent = tab.url ? hostLabel(tab.url) : "new tab";
+    label.title = tab.url || "Empty tab";
+    label.addEventListener("click", () => activate(tab.id));
+
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "tab-close";
+    close.textContent = "×";
+    close.setAttribute("aria-label", `Close ${label.textContent}`);
+    close.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeTab(tab.id);
+    });
+
+    el.append(label, close);
+    tabsEl.appendChild(el);
+  }
+}
+
+// ------------------------------------------------------------- frames
+
+function frameFor(tab) {
+  let frame = frames.get(tab.id);
+  if (!frame) {
+    frame = document.createElement("iframe");
+    frame.className = "frame";
+    frame.title = "Goontek panel content";
+    frame.referrerPolicy = "no-referrer";
+    frame.setAttribute(
+      "sandbox",
+      "allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+    );
+    // A frame resets media state on every navigation, so re-send the volume
+    // once the new document has a chance to install its listener.
+    frame.addEventListener("load", () => pushVolume(frame));
+    frames.set(tab.id, frame);
+    stage.appendChild(frame);
+  }
+  return frame;
+}
+
+function destroyFrame(id) {
+  const frame = frames.get(id);
+  if (frame) {
+    frame.src = "about:blank";
+    frame.remove();
+    frames.delete(id);
+  }
+  fits.delete(id);
+}
+
+// ------------------------------------------------------------ fit width
+
+// Sites with a hard minimum width overflow a narrow panel. When a framed
+// document reports needing more room than it has, lay the frame out at that
+// width and scale it down so the whole page stays visible.
+//
+// Only the first overflowing report per navigation is honoured; re-fitting on
+// later reports would measure an already-scaled frame and oscillate.
+const fits = new Map(); // tab id -> required CSS width
+
+window.addEventListener("message", (event) => {
+  const msg = event.data;
+  if (!msg || msg.source !== "goontek" || msg.type !== "fit") return;
+
+  for (const [id, frame] of frames) {
+    if (frame.contentWindow !== event.source) continue;
+    if (fits.has(id)) return; // already fitted for this navigation
+    const required = Number(msg.required);
+    if (!Number.isFinite(required) || required < 200) return;
+    fits.set(id, required);
+    applyFit(id);
+    return;
+  }
+});
+
+function applyFit(id) {
+  const frame = frames.get(id);
+  if (!frame) return;
+
+  const required = fits.get(id);
+  const width = stage.clientWidth;
+  const height = stage.clientHeight;
+
+  if (!required || !width || required <= width + 8) {
+    clearFit(frame);
+    return;
+  }
+
+  const scale = width / required;
+  frame.style.width = `${required}px`;
+  frame.style.height = `${Math.ceil(height / scale)}px`;
+  frame.style.transform = `scale(${scale})`;
+}
+
+function clearFit(frame) {
+  frame.style.width = "";
+  frame.style.height = "";
+  frame.style.transform = "";
+}
+
+// The panel is user-resizable, so a fitted frame has to be rescaled with it.
+new ResizeObserver(() => {
+  for (const id of fits.keys()) applyFit(id);
+}).observe(stage);
+
+/** Show only the active tab's frame; show the empty state if it has no URL. */
+function showActive() {
+  const tab = activeTab();
+  for (const [id, frame] of frames) {
+    frame.classList.toggle("visible", tab != null && id === tab.id);
+  }
+  const blank = !tab || !tab.url;
+  empty.classList.toggle("hidden", !blank);
+  urlInput.value = tab?.url || "";
+  renderFavStar();
+}
+
+// --------------------------------------------------------- favourites
+
+function favIndex(url) {
+  return config.favourites.findIndex((f) => f.url === url);
+}
+
+function renderFavStar() {
+  const url = activeTab()?.url || "";
+  const saved = Boolean(url) && favIndex(url) !== -1;
+  const btn = $("fav");
+  btn.textContent = saved ? "★" : "☆";
+  btn.setAttribute("aria-pressed", String(saved));
+  btn.title = saved ? "Remove from favourites (Ctrl+D)" : "Add to favourites (Ctrl+D)";
+  btn.disabled = !url;
+}
+
+function renderFavourites() {
+  const wrap = $("favs");
+  wrap.textContent = "";
+  for (const fav of config.favourites) {
+    const el = document.createElement("div");
+    el.className = "fav";
+
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "fav-label";
+    open.textContent = fav.name;
+    open.title = `${fav.url}\nClick to open, shift-click for a new tab`;
+    open.addEventListener("click", (e) => {
+      if (e.shiftKey) newTab({ url: fav.url });
+      else navigate(fav.url);
+    });
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "fav-remove";
+    remove.textContent = "×";
+    remove.setAttribute("aria-label", `Remove ${fav.name} from favourites`);
+    remove.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const i = favIndex(fav.url);
+      if (i !== -1) config.favourites.splice(i, 1);
+      await saveConfig();
+      renderFavourites();
+      renderFavStar();
+      toast("Removed from favourites");
+    });
+
+    el.append(open, remove);
+    wrap.appendChild(el);
+  }
+}
+
+async function toggleFavourite() {
+  const url = activeTab()?.url;
+  if (!url) {
+    toast("Nothing to favourite");
+    return;
+  }
+  const i = favIndex(url);
+  if (i === -1) {
+    config.favourites.push({ name: hostLabel(url), url });
+    toast("Added to favourites");
+  } else {
+    config.favourites.splice(i, 1);
+    toast("Removed from favourites");
+  }
+  await saveConfig();
+  renderFavourites();
+  renderFavStar();
+}
+
+$("fav").addEventListener("click", toggleFavourite);
+
+// --------------------------------------------------------- navigation
+
+omni.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const target = normalize(urlInput.value.trim());
+  if (target) navigate(target);
+});
+
+function normalize(raw) {
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  // Bare domain (a dot, no whitespace) → assume https.
+  if (/^[^\s]+\.[^\s]+$/.test(raw)) return "https://" + raw;
+  return "https://duckduckgo.com/?q=" + encodeURIComponent(raw);
+}
+
+function navigate(url) {
+  const tab = activeTab() || newTab({ focus: false });
+  if (!tab) return;
+  tab.url = url;
+
+  const frame = frameFor(tab);
+  // A new document measures its own width from scratch.
+  fits.delete(tab.id);
+  clearFit(frame);
+  frame.src = url;
+
+  if (!visited.includes(url)) visited.push(url);
+
+  saveSession();
+  renderTabs();
+  showActive();
+
+  // Iframe navigations should not reach chrome://history, but scrub anyway in
+  // case the URL arrived through the omnibox.
+  chrome.runtime.sendMessage({ type: "goontek:visited", url }).catch(() => {});
+}
+
+function reload() {
+  const tab = activeTab();
+  if (!tab?.url) return;
+  const frame = frames.get(tab.id);
+  if (frame) {
+    fits.delete(tab.id);
+    clearFit(frame);
+    // Reassigning src is the only reload available for a cross-origin frame.
+    frame.src = "about:blank";
+    frame.src = tab.url;
+  } else {
+    navigate(tab.url);
+  }
+}
+
+function hostLabel(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url.slice(0, 18);
+  }
+}
+
+// ------------------------------------------------------------- volume
+
+function pushVolume(frame) {
+  const value = config.muted ? 0 : config.volume;
+  try {
+    frame.contentWindow?.postMessage(
+      { source: "goontek", type: "volume", value, muted: config.muted },
+      "*"
+    );
+  } catch {
+    // Frame not ready or already torn down.
+  }
+}
+
+function pushVolumeAll() {
+  for (const frame of frames.values()) pushVolume(frame);
+}
+
+function renderVolume() {
+  const pct = Math.round(config.volume * 100);
+  const slider = $("vol");
+  slider.value = String(pct);
+  // Drives the filled portion of the track via CSS.
+  slider.style.setProperty("--fill", `${config.muted ? 0 : pct}%`);
+
+  const wrap = $("volwrap");
+  wrap.dataset.level = config.muted || pct === 0 ? "mute" : pct < 50 ? "low" : "high";
+
+  const mute = $("mute");
+  mute.setAttribute("aria-pressed", String(config.muted || pct === 0));
+  mute.title = config.muted ? "Unmute" : `Mute (${pct}%)`;
+}
+
+$("vol").addEventListener("input", (e) => {
+  config.volume = Number(e.target.value) / 100;
+  config.muted = false;
+  renderVolume();
+  pushVolumeAll();
+});
+
+$("vol").addEventListener("change", saveConfig);
+
+$("mute").addEventListener("click", () => {
+  config.muted = !config.muted;
+  renderVolume();
+  pushVolumeAll();
+  saveConfig();
+});
+
+// ------------------------------------------------------- other controls
+
+$("newtab").addEventListener("click", () => newTab());
+$("refresh").addEventListener("click", reload);
+
+$("clear").addEventListener("click", async () => {
+  if (visited.length === 0) {
+    toast("Nothing to clear");
+    return;
+  }
+  const res = await chrome.runtime
+    .sendMessage({ type: "goontek:clear-history", urls: visited })
+    .catch(() => null);
+  const n = res?.count ?? visited.length;
+  visited = [];
+  saveSession();
+  toast(`Cleared ${n} ${n === 1 ? "entry" : "entries"}`);
+});
+
+$("panic").addEventListener("click", () => minimize());
+$("reopen").addEventListener("click", restore);
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type === "goontek:panic") {
+    if (minimized) restore();
+    else minimize();
+  }
+});
+
+/**
+ * Cover the panel and silence playing media, keeping tabs alive so restore()
+ * puts the session back as it was. History is scrubbed here because it is the
+ * only trace that outlives the panel.
+ */
+async function minimize() {
+  if (minimized) return;
+  minimized = true;
+
+  // Silence before painting, so nothing keeps playing behind the curtain.
+  for (const frame of frames.values()) {
+    try {
+      frame.contentWindow?.postMessage({ source: "goontek", type: "pause" }, "*");
+    } catch {}
+  }
+
+  document.body.classList.add("minimized");
+  $("curtain").hidden = false;
+  $("reopen").focus();
+
+  if (visited.length) {
+    await chrome.runtime
+      .sendMessage({ type: "goontek:clear-history", urls: visited })
+      .catch(() => {});
+    visited = [];
+    saveSession();
+  }
+}
+
+function restore() {
+  minimized = false;
+  document.body.classList.remove("minimized");
+  $("curtain").hidden = true;
+  pushVolumeAll();
+  urlInput.focus();
+}
+
+// ------------------------------------------------------------ keyboard
+
+document.addEventListener("keydown", (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (!mod) return;
+
+  if (e.key === "t") {
+    e.preventDefault();
+    newTab();
+  } else if (e.key === "w") {
+    e.preventDefault();
+    if (activeId != null) closeTab(activeId);
+  } else if (e.key === "l") {
+    e.preventDefault();
+    urlInput.select();
+  } else if (e.key === "r") {
+    e.preventDefault();
+    reload();
+  } else if (e.key === "d") {
+    e.preventDefault();
+    toggleFavourite();
+  } else if (e.key >= "1" && e.key <= "8") {
+    const tab = tabs[Number(e.key) - 1];
+    if (tab) {
+      e.preventDefault();
+      activate(tab.id);
+    }
+  }
+});
+
+// --------------------------------------------------------- persistence
+
+let toastTimer = null;
+function toast(text) {
+  toastEl.textContent = text;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1600);
+}
+
+function saveConfig() {
+  return chrome.storage.local.set({ [CONFIG_KEY]: config });
+}
+
+function saveSession() {
+  return chrome.storage.session.set({
+    [SESSION_KEY]: { tabs, activeId, visited, nextId },
+  });
+}

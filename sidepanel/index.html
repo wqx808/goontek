@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Goontek</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="bar" id="bar">
+      <!-- Row 1: open tabs -->
+      <div class="tabstrip">
+        <div class="tabs" id="tabs" role="tablist" aria-label="Panel tabs"></div>
+        <button type="button" id="newtab" class="icon" title="New tab (Ctrl+T)" aria-label="New tab">+</button>
+      </div>
+
+      <!-- Row 2: address -->
+      <form class="omni" id="omni">
+        <button type="button" id="refresh" class="icon" title="Reload (Ctrl+R)" aria-label="Reload">↻</button>
+        <input
+          id="url"
+          type="text"
+          inputmode="url"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Type a URL or search…"
+          aria-label="Address"
+        />
+        <button type="button" id="fav" class="icon" title="Add to favourites (Ctrl+D)" aria-label="Add to favourites" aria-pressed="false">☆</button>
+      </form>
+
+      <!-- Row 2b: favourites (hidden when empty) -->
+      <div class="favs" id="favs" aria-label="Favourites"></div>
+
+      <!-- Row 3: volume and privacy -->
+      <div class="actions">
+        <div class="vol" id="volwrap">
+          <button type="button" id="mute" class="vol-icon" title="Mute" aria-label="Mute" aria-pressed="false">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path class="spk" d="M3.5 6h2L8.5 3.5v9L5.5 10h-2z" />
+              <path class="wave wave-1" d="M10.6 6.1a2.6 2.6 0 0 1 0 3.8" />
+              <path class="wave wave-2" d="M12.3 4.4a5 5 0 0 1 0 7.2" />
+              <path class="cross" d="M10.8 6.2l3.4 3.6M14.2 6.2l-3.4 3.6" />
+            </svg>
+          </button>
+          <input id="vol" type="range" min="0" max="100" step="1" value="100" aria-label="Volume" />
+        </div>
+
+        <span class="spacer"></span>
+
+        <button type="button" id="clear" class="ghost" title="Delete this session's URLs from browser history">
+          clear
+        </button>
+        <button type="button" id="panic" class="ghost danger" title="Minimize and mute (Ctrl+Shift+H)">
+          hide
+        </button>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <div class="empty" id="empty">
+        <p>Nothing loaded.</p>
+        <p class="hint">Type a URL above to begin.</p>
+      </div>
+    </main>
+
+    <!-- Shown in place of everything else while minimized. Deliberately blank. -->
+    <div class="curtain" id="curtain" hidden>
+      <button type="button" id="reopen" class="reopen" title="Reopen (Ctrl+Shift+H)">reopen</button>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
