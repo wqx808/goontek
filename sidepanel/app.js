@@ -834,6 +834,11 @@ $("reqMobile").addEventListener("click", () => {
   requestMobileSite();
 });
 
+$("showDiag").addEventListener("click", () => {
+  $("settingsPanel").hidden = true;
+  diagnose();
+});
+
 $("reportBug").addEventListener("click", () => newTab({ url: BUG_URL }));
 
 $("donate").addEventListener("click", () => {

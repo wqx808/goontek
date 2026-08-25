@@ -85,12 +85,15 @@ stored the first time you visited in a normal tab, not from the screen. The
 panel shares your profile's cookies, so it inherits that preference and forcing a
 phone width only crops the desktop layout instead of switching it.
 
-**Request mobile version of this site** (Settings → Browsing, or `Ctrl+Shift+M`)
-clears that one site's stored desktop preference and reloads. It only touches
-cookies and storage whose names look like a device preference, so it won't wipe
-your session wholesale — but it may sign you out of that site. Server-set
-preferences (HttpOnly cookies) can't be cleared this way; those need a separate
-browser profile.
+**Settings → Troubleshooting → Request mobile version of this site** clears that
+one site's stored desktop preference and reloads. It only touches cookies and
+storage whose names look like a device preference, so it won't wipe your session
+wholesale — but it may sign you out of that site. Server-set preferences
+(HttpOnly cookies) can't be cleared this way; those need a separate profile.
+
+Both this and **Diagnostics** live under Settings → Troubleshooting as buttons.
+Use the buttons, not the keyboard shortcuts: once you click into the framed page,
+keyboard focus is inside the site's iframe and the panel's shortcuts stop firing.
 
 ## Something not rendering?
 
