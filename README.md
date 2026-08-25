@@ -54,24 +54,26 @@ URLs from history. Your tabs survive, so reopening puts you back where you were.
 
 ### Ad blocking is browser-wide
 
-It's always on, and it isn't limited to the panel. Requests made by a framed
-page are attributed to that page rather than to the extension, so Chrome gives
-no way to scope the rules to the side panel. Everything in
-`rules/blocklist.json` is blocked everywhere for as long as Goontek is
-installed, and uninstalling is the only way to turn it off.
+On by default, and not limited to the panel. Requests made by a framed page are
+attributed to that page rather than to the extension, so Chrome gives no way to
+scope the rules to the side panel. Everything in `rules/blocklist.json` is
+blocked everywhere for as long as it stays on. Turn it off under Settings →
+Browsing.
+
+Domain blocking cannot stop ads a site serves from its own domain or CDN, so
+treat this as tracker reduction rather than a full ad blocker.
 
 ## Width, and why it renders like a phone
 
 The width dropdown sets the width the page is *laid out at*, then zooms that to
 fit the panel. This is the single most important control for how a site looks.
 
-- **phone (390) / phone S (360)** — the default. The page is told it has a
+- **mobile (390) / mobile S (360)** — the default. The page is told it has a
   ~390px screen, exactly like an iPhone, so responsive sites serve their mobile
   layout. The result is zoomed up to fill the panel.
-- **tablet (768)** — a middle ground for sites whose phone layout is too sparse.
 - **auto** — lays out at the panel's real width and only intervenes if the page
   overflows. Good for sites that are already responsive at desktop widths.
-- **desktop (1100 / 1280)** — forces the full desktop layout, zoomed down.
+- **desktop (1100)** — forces the full desktop layout, zoomed down.
 
 Why a fixed 390 rather than just using the panel width: a side panel is often
 ~450–550px, and many sites treat that as a small *desktop* window and serve the
@@ -110,7 +112,9 @@ version" cookie also override it, since the cookie jar is shared.
 
 ## Notes
 
-Icons are placeholders. No build step: edit, then hit reload on
-`chrome://extensions`.
+No build step: edit, then hit reload on `chrome://extensions`.
+
+`icons/logo.png` is the 1024px master; the `icon*.png` sizes are downscaled
+from it.
 
 MIT licensed.
