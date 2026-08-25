@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Goontek",
+  "name": "goontek",
   "version": "1.0.0",
-  "description": "Privacy-first side browsing panel. Clean, ephemeral, one hotkey away from gone.",
+  "description": "A private browsing panel. Dock any site in the side panel with its own tabs, blocked ads, no history, and a hide key.",
   "minimum_chrome_version": "116",
   "permissions": [
     "sidePanel",
@@ -25,14 +25,14 @@
         "default": "Ctrl+Shift+Space",
         "mac": "Command+Shift+Space"
       },
-      "description": "Toggle Goontek side panel"
+      "description": "Toggle goontek side panel"
     },
     "panic-hide": {
       "suggested_key": {
         "default": "Ctrl+Shift+H",
         "mac": "Command+Shift+H"
       },
-      "description": "Instant hide + clean"
+      "description": "Hide the panel and mute everything"
     }
   },
   "icons": {
@@ -42,7 +42,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "Goontek",
+    "default_title": "goontek",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

@@ -1,8 +1,7 @@
-# Goontek
+<img src="icons/wordmark.jpg" alt="goontek" width="420">
 
-A private browsing panel for Chromium browsers. Docks any site in the side panel
-with its own tabs, blocks ads, keeps nothing in your history, and hides with one
-keystroke.
+A private browsing panel for Chromium browsers. Dock any site in the side panel
+with its own tabs, blocked ads, no history, and a hide key.
 
 No accounts, no servers, no telemetry, no build step.
 
@@ -22,140 +21,125 @@ Not on the Web Store yet. Needs Chrome 116+.
 | Hide, and bring it back | `Ctrl/Cmd + Shift + H` |
 | New / close tab | `Ctrl+T` / `Ctrl+W` |
 | Switch tab | `Ctrl+1` … `Ctrl+8` |
+| Back / forward | `Alt+←` / `Alt+→` |
 | Address bar / reload | `Ctrl+L` / `Ctrl+R` |
 | Favourite | `Ctrl+D` |
+| Request mobile site | `Ctrl+Shift+M` |
 | Diagnostics | `Ctrl+Shift+D` |
-| Settings | `Ctrl+,` or the gear |
-| Layout width | dropdown in the panel |
+| Settings | `Ctrl+,` |
 
-Every shortcut above except tab switching can be rebound under Settings →
-Shortcuts. The two browser-level ones (open panel, hide) are Chrome commands and
-can only be changed at `chrome://extensions/shortcuts`, which the settings panel
-links to.
+All of these except tab switching can be rebound under Settings → Shortcuts. The
+two browser-level ones (open panel, hide) are Chrome commands, changeable only at
+`chrome://extensions/shortcuts`, which Settings links to.
 
-Hide covers the panel, mutes and pauses every frame, and deletes the session's
-URLs from history. Your tabs survive, so reopening puts you back where you were.
+**Shortcuts stop working once you click into the page** — focus moves inside the
+site's frame and the panel stops seeing keystrokes. The equivalents are buttons
+under Settings → Troubleshooting.
 
-## What it does, and what it can't
+**Hide** covers the panel, mutes and pauses every frame, and deletes the
+session's URLs from history. Tabs survive, so reopening puts you back.
 
-- Panel browsing doesn't reach `chrome://history`. URLs are deleted explicitly
-  on top of that.
+## Privacy
+
+- Panel browsing doesn't reach `chrome://history`, and URLs are deleted
+  explicitly on top of that.
 - Open tabs live in session storage and die with the browser. Favourites are
   kept on disk and survive hiding.
-- **Cookies are not isolated.** Framed pages share your normal profile's cookie
-  jar; Manifest V3 offers no per-frame container. Use a separate browser profile
-  if you need real isolation.
-- **Not every site will load.** `X-Frame-Options` and CSP framing headers are
-  stripped for sites you open in the panel (including links you click within
-  them), but sites that detect framing in JavaScript — most login flows and
-  banks — will still refuse.
-- It makes no network requests of its own. `<all_urls>` is needed because the
-  panel can load any site; the `history` permission is only ever used to delete.
+- No network requests of its own, no analytics, no third-party code.
+- `<all_urls>` is needed because the panel can load any site. `history` is only
+  ever used to delete.
 
-### Ad blocking is browser-wide
+**Not isolation.** Framed sites are third-party to the panel, which has two
+consequences: some cookies are refused (see below), and nothing here guarantees
+separation from your normal profile. For real isolation, use a separate browser
+profile.
 
-On by default, and not limited to the panel. Requests made by a framed page are
-attributed to that page rather than to the extension, so Chrome gives no way to
-scope the rules to the side panel. Everything in `rules/blocklist.json` is
-blocked everywhere for as long as it stays on. Turn it off under Settings →
-Browsing.
+**Not every site loads.** Framing headers are stripped for sites you open in the
+panel and links you click inside them, but sites that detect framing in
+JavaScript — most login flows and banks — still refuse.
 
-Domain blocking cannot stop ads a site serves from its own domain or CDN, so
-treat this as tracker reduction rather than a full ad blocker.
+## Ad blocking
 
-## Width, and why it renders like a phone
+On by default, in two layers: known ad and tracker domains are blocked at the
+network level, and known ad containers are hidden with a stylesheet. Turn it off
+under Settings → Browsing.
+
+Two honest limits. It is **browser-wide**, not panel-only — requests from a
+framed page are attributed to that page, so there is no way to scope the rules to
+the panel. And it cannot stop ads a site serves from its own domain. Treat it as
+tracker reduction, not a full ad blocker.
+
+## Width, and why sites render like a phone
 
 The width dropdown sets the width the page is *laid out at*, then zooms that to
-fit the panel. This is the single most important control for how a site looks.
+fit the panel. It is the main control over how a site looks.
 
 - **mobile (390) / mobile S (360)** — the default. The page is told it has a
-  ~390px screen, exactly like an iPhone, so responsive sites serve their mobile
-  layout. The result is zoomed up to fill the panel.
-- **auto** — lays out at the panel's real width and only intervenes if the page
-  overflows. Good for sites that are already responsive at desktop widths.
-- **desktop (1100)** — forces the full desktop layout, zoomed down.
+  phone screen, so responsive sites serve their mobile layout, zoomed up to fill
+  the panel.
+- **auto** — lays out at the panel's real width, stepping in only if the page
+  overflows.
+- **desktop (1100)** — forces the desktop layout, zoomed down.
 
-Why a fixed 390 rather than just using the panel width: a side panel is often
-~450–550px, and many sites treat that as a small *desktop* window and serve the
-desktop layout, which then overflows and shrinks. Pinning the layout to 390px is
-unambiguously a phone, so the mobile layout wins — the same reason the site looks
-right on an actual iPhone. Zooming up to fill the panel is done with CSS `zoom`,
-so text stays sharp rather than blurring.
+A side panel is often 450–550px, which many sites read as a small *desktop*
+window. Pinning the layout to 390px is unambiguously a phone, so the mobile
+layout wins — the same reason a site looks right on an actual iPhone. Zooming
+uses CSS `zoom`, so text stays sharp.
 
-### Age gates and cookie banners that keep coming back
+## Video
 
-If a site asks you to confirm your age, or accept cookies, every single time,
-it is because the panel embeds sites **cross-site**. A site records that kind of
-choice in an ordinary cookie (`SameSite=Lax` by default), and browsers refuse
-those in a third-party frame — so the site never manages to write down that you
-answered.
+A side panel cannot go fullscreen. Whenever a video is playing, two controls
+appear in the corner of the page:
 
-Manifest V3 gives an extension no way around this: it cannot rewrite
-`Set-Cookie` to mark those cookies as cross-site usable. Two things do work:
+- **Theater** — blacks out the page and fills the panel with the video. The
+  player's own fullscreen button does this too. Escape, **Exit**, or that button
+  again returns.
+- **Pop out** — Picture-in-Picture, a floating window outside the panel.
 
-- Allow third-party cookies for that one site. In Chrome, Settings → Privacy
-  and security → Third-party cookies → *Sites allowed to use third-party
-  cookies* → Add `[*.]example.com`. In Brave, open Shields on the site and
-  set Cookies to allow.
-- Or open the site in a browser tab (Settings → Troubleshooting), where it is
-  first-party and behaves normally.
+They sit in the page rather than the panel because Picture-in-Picture needs a
+user gesture in the frame, and a click in the panel doesn't carry one across.
 
-**Diagnostics** reports this directly: if *normal cookie (SameSite=Lax)* is
-`false`, that is the cause.
-
-### When a site stays desktop anyway
-
-A few sites (Pornhub is one) decide desktop-vs-mobile from a preference they
-stored the first time you visited in a normal tab, not from the screen. The
-panel shares your profile's cookies, so it inherits that preference and forcing a
-phone width only crops the desktop layout instead of switching it.
-
-**Settings → Troubleshooting → Request mobile version of this site** clears that
-one site's stored desktop preference and reloads. It only touches cookies and
-storage whose names look like a device preference, so it won't wipe your session
-wholesale — but it may sign you out of that site. Server-set preferences
-(HttpOnly cookies) can't be cleared this way; those need a separate profile.
-
-Both this and **Diagnostics** live under Settings → Troubleshooting as buttons.
-Use the buttons, not the keyboard shortcuts: once you click into the framed page,
-keyboard focus is inside the site's iframe and the panel's shortcuts stop firing.
-
-## Something not rendering?
-
-Press `Ctrl+Shift+D`. It reports whether the network rules and content scripts
-registered, whether they're running in the current frame, and whether the page
-is wider than the panel.
-
-## Making a video bigger
-
-A side panel cannot go fullscreen, so a video gets two controls of its own,
-shown in the corner of the page whenever one is playing:
-
-- **Theater** blacks out the page and fills the panel with the video. The
-  player's own fullscreen button triggers it too, since a side panel cannot
-  really go fullscreen. Escape, **Exit**, or the player's button again returns.
-  The video is restyled where it sits and never moved in the DOM, so playback
-  (including streamed/MSE video such as YouTube) is unaffected.
-- **Pop out** puts it in a floating Picture-in-Picture window outside the panel.
-
-They live in the page rather than the panel because Picture-in-Picture needs a
-user gesture in the frame, and a click in the panel does not carry one across.
-
-For true monitor-wide fullscreen, use **Settings → Troubleshooting → Open this
+For real monitor-wide fullscreen, use Settings → Troubleshooting → **Open this
 page in a browser tab**.
 
-## Something else not rendering?
+## When something misbehaves
 
-Two known gaps show up there: the mobile User-Agent doesn't reach content a site
-fetches after load, or nested iframes like embedded players, because those
-requests come from the page's own origin. Sites that remember a "desktop
-version" cookie also override it, since the cookie jar is shared.
+Settings → Troubleshooting → **Diagnostics** reports what the site actually
+sees: the User-Agent and viewport, whether the rules and content scripts are
+live, cookie behaviour, and page width against the panel.
 
-## Notes
+**A site asks your age or cookie consent every time.** Framed sites are
+third-party, and browsers refuse the ordinary (`SameSite=Lax`) cookies those
+prompts write, so the site never records your answer. Manifest V3 gives an
+extension no way to rewrite `Set-Cookie` to fix this. Either allow third-party
+cookies for that site (Chrome: Settings → Privacy → Third-party cookies → add
+`[*.]example.com`; Brave: Shields → Cookies), or open it in a browser tab.
+Diagnostics confirms it: *normal cookie (SameSite=Lax)* reads `false`.
+
+**A site stays on its desktop layout.** Some sites decide from a preference
+stored the first time you visited in a normal tab. **Request mobile version of
+this site** clears that one site's stored preference and reloads. It only touches
+names that look like a device preference, so your session survives — but it may
+sign you out. Server-set (HttpOnly) preferences need a separate profile.
+
+**The mobile User-Agent has gaps.** It doesn't reach content a site fetches after
+load, because those requests come from the page's own origin rather than the
+extension.
+
+## Layout
+
+```
+manifest.json     MV3 manifest, permissions, shortcuts
+background.js     Service worker: panel, history scrubbing, network rules
+content/
+  mobile.js       Mobile emulation, main world, document_start
+  panel.js        Volume, width, theater, PiP, cosmetic ad hiding
+rules/
+  blocklist.json  Ad and tracker domains
+sidepanel/        Panel markup, styles, controller
+icons/            logo.png is the 1024px master; icon*.png derive from it
+```
 
 No build step: edit, then hit reload on `chrome://extensions`.
-
-`icons/logo.png` is the 1024px master; the `icon*.png` sizes are downscaled
-from it.
 
 MIT licensed.

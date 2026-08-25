@@ -179,7 +179,7 @@ function frameFor(tab) {
   if (!frame) {
     frame = document.createElement("iframe");
     frame.className = "frame";
-    frame.title = "Goontek panel content";
+    frame.title = "goontek panel content";
     frame.referrerPolicy = "no-referrer";
     frame.setAttribute(
       "sandbox",
