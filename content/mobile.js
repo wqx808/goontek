@@ -65,8 +65,14 @@
   // Route every route to the panel's theater view instead. The handler lives in
   // the isolated world, and a CustomEvent on the shared document is the way to
   // reach it from here.
-  const askTheater = (type) => {
+  // The element the player asked to fullscreen is the authoritative answer to
+  // "which video". Guessing instead picks the wrong one on pages with an
+  // autoplaying ad. Worlds cannot share objects, so mark it in the DOM.
+  const askTheater = (type, target) => {
     try {
+      const prev = document.querySelector("[data-goontek-fs-target]");
+      if (prev) prev.removeAttribute("data-goontek-fs-target");
+      if (target && target.setAttribute) target.setAttribute("data-goontek-fs-target", "1");
       document.dispatchEvent(new CustomEvent("goontek:theater-" + type));
     } catch {}
     return Promise.resolve();
@@ -80,7 +86,7 @@
           // Toggle: players that track fullscreen state internally call enter
           // again on their own button rather than exit, so a second enter has
           // to close theater or the button appears dead.
-          return askTheater(inTheater() ? "exit" : "enter");
+          return askTheater(inTheater() ? "exit" : "enter", this);
         },
         writable: true,
         configurable: true,
@@ -118,7 +124,7 @@
     });
     Object.defineProperty(VP, "webkitEnterFullscreen", {
       value: function () {
-        askTheater(inTheater() ? "exit" : "enter");
+        askTheater(inTheater() ? "exit" : "enter", this);
       },
       writable: true,
       configurable: true,

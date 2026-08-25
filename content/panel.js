@@ -56,19 +56,34 @@
   // other hooks miss (SPA route changes). Stops mattering once the tab closes.
   setInterval(announce, 700);
 
-  // Pick the video most likely meant: the one playing, else the largest.
+  /**
+   * Which video the user means.
+   *
+   * Size decides, not DOM order or playback. A page can have an autoplaying ad
+   * above the real player, and picking the first *playing* video promotes the
+   * ad. The real player is essentially always the largest one on screen.
+   *
+   * A hint from the page's own fullscreen request wins outright, since that is
+   * the element it actually asked to enlarge.
+   */
   function pickVideo(hint) {
     if (hint && hint.tagName === "VIDEO") return hint;
-    if (hint && hint.querySelector) {
-      const inside = hint.querySelector("video");
-      if (inside) return inside;
+
+    let pool = [];
+    if (hint && hint.querySelectorAll) pool = [...hint.querySelectorAll("video")];
+    if (!pool.length) pool = [...document.querySelectorAll("video")];
+
+    const scored = [];
+    for (const v of pool) {
+      const r = v.getBoundingClientRect();
+      const area = r.width * r.height;
+      if (area <= 0) continue; // hidden or not laid out
+      scored.push({ v, area, playing: !v.paused && !v.ended && v.readyState > 2 });
     }
-    const vids = [...document.querySelectorAll("video")];
-    const playing = vids.find((v) => !v.paused && !v.ended && v.readyState > 2);
-    if (playing) return playing;
-    return vids.sort(
-      (a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight
-    )[0];
+    if (!scored.length) return pool[0] || null;
+
+    scored.sort((a, b) => b.area - a.area || Number(b.playing) - Number(a.playing));
+    return scored[0].v;
   }
 
   function toPiP(hint) {
@@ -201,7 +216,9 @@
 
   function enterTheater() {
     if (theater) return;
-    const video = pickVideo(null);
+    // mobile.js marks whatever the page asked to fullscreen.
+    const asked = document.querySelector("[data-goontek-fs-target]");
+    const video = pickVideo(asked);
     if (!video) return;
 
     // The video plus every ancestor below <body>.
@@ -259,6 +276,8 @@
 
     document.documentElement.removeAttribute("data-goontek-theater");
     video.removeAttribute("data-goontek-tv");
+    const asked = document.querySelector("[data-goontek-fs-target]");
+    if (asked) asked.removeAttribute("data-goontek-fs-target");
     document.dispatchEvent(new Event("fullscreenchange"));
     document.dispatchEvent(new Event("webkitfullscreenchange"));
 
