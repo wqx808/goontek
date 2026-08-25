@@ -98,17 +98,70 @@
   // rest. That also stops a widen/re-measure/shrink oscillation.
   const MAX_WIDTH = 1600;
 
+  /**
+   * Widest in-flow content, for pages where scrollWidth lies.
+   *
+   * `overflow-x: hidden` on the root or body clips the overflow instead of
+   * scrolling it, which pins scrollWidth to the viewport width. The page then
+   * measures as fitting while its content is visibly cut off. Walking the tree
+   * finds the real extent.
+   *
+   * Elements designed to scroll sideways are measured but not descended into,
+   * so a carousel's off-screen items don't inflate the result.
+   */
+  function widestContent() {
+    const body = document.body;
+    if (!body) return 0;
+
+    let max = 0;
+    let budget = 3000;
+
+    const walk = (el) => {
+      if (budget-- <= 0) return;
+      const cs = getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden" || cs.position === "fixed") return;
+
+      const rect = el.getBoundingClientRect();
+      if (rect.width >= 1 && rect.height >= 1) {
+        max = Math.max(max, rect.right + window.scrollX);
+      }
+      // A px min-width forces layout even while the box is clipped.
+      if (cs.minWidth.endsWith("px")) {
+        max = Math.max(max, parseFloat(cs.minWidth) || 0);
+      }
+
+      if (cs.overflowX === "auto" || cs.overflowX === "scroll") return;
+      for (const child of el.children) walk(child);
+    };
+
+    walk(body);
+    return max;
+  }
+
   function measure() {
     const doc = document.documentElement;
     const body = document.body;
     if (!doc) return;
-    const needed = Math.max(
+
+    const viewport = window.innerWidth;
+    let needed = Math.max(
       doc.scrollWidth,
       body ? body.scrollWidth : 0,
       doc.getBoundingClientRect().width
     );
-    const viewport = window.innerWidth;
-    // Ignore noise; only report a genuine overflow.
+
+    // Only fall back to the tree walk when the page clips its own overflow,
+    // which is the case scrollWidth cannot see. Sites that scroll normally
+    // already report correctly and are left alone.
+    const clipped = [doc, body].some(
+      (el) => el && /^(hidden|clip)$/.test(getComputedStyle(el).overflowX)
+    );
+    if (clipped && needed <= viewport + 8) {
+      const walked = widestContent();
+      // Ignore implausible results rather than shrinking a page to nothing.
+      if (walked > viewport + 8 && walked <= viewport * 4) needed = walked;
+    }
+
     if (needed > viewport + 8) {
       parent.postMessage(
         { source: "goontek", type: "fit", required: Math.min(Math.ceil(needed), MAX_WIDTH) },
