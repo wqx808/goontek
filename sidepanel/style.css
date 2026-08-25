@@ -539,6 +539,19 @@ select.ghost option { background: var(--surface); color: var(--text); }
 }
 .wide:hover { border-color: var(--border-strong); background: var(--raised); }
 
+.sheet-body .note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.sheet-body .note code {
+  font-size: 10px;
+  background: var(--raised);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
 .donate { margin-top: 10px; text-align: center; }
 .donate[hidden] { display: none; }
 .donate code {

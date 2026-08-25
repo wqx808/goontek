@@ -78,6 +78,20 @@ unambiguously a phone, so the mobile layout wins — the same reason the site lo
 right on an actual iPhone. Zooming up to fill the panel is done with CSS `zoom`,
 so text stays sharp rather than blurring.
 
+### When a site stays desktop anyway
+
+A few sites (Pornhub is one) decide desktop-vs-mobile from a preference they
+stored the first time you visited in a normal tab, not from the screen. The
+panel shares your profile's cookies, so it inherits that preference and forcing a
+phone width only crops the desktop layout instead of switching it.
+
+**Request mobile version of this site** (Settings → Browsing, or `Ctrl+Shift+M`)
+clears that one site's stored desktop preference and reloads. It only touches
+cookies and storage whose names look like a device preference, so it won't wipe
+your session wholesale — but it may sign you out of that site. Server-set
+preferences (HttpOnly cookies) can't be cleared this way; those need a separate
+browser profile.
+
 ## Something not rendering?
 
 Press `Ctrl+Shift+D`. It reports whether the network rules and content scripts

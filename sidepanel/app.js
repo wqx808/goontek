@@ -235,6 +235,10 @@ window.addEventListener("message", (event) => {
     applyFit(id);
   } else if (msg.type === "located") {
     recordVisit(id, msg.url);
+  } else if (msg.type === "cleared") {
+    const c = msg.cleared || {};
+    const n = (c.cookies?.length || 0) + (c.storage?.length || 0);
+    toast(n ? `Cleared ${n}, reloading…` : "No desktop preference found");
   } else if (msg.type === "fullscreen") {
     const frame = frames.get(id);
     if (!frame) return;
@@ -489,6 +493,28 @@ function navigate(url) {
   // Iframe navigations should not reach chrome://history, but scrub anyway in
   // case the URL arrived through the omnibox.
   chrome.runtime.sendMessage({ type: "goontek:visited", url }).catch(() => {});
+}
+
+// Safari's "Request Mobile Website", for sites that serve desktop because of a
+// stored preference rather than the viewport. Clears that site's own preference
+// cookies/storage (from inside the frame, no cookie permission), then reloads.
+function requestMobileSite() {
+  const tab = activeTab();
+  const frame = tab && frames.get(tab.id);
+  if (!frame || !tab.url) {
+    toast("Nothing loaded");
+    return;
+  }
+  try {
+    frame.contentWindow?.postMessage({ source: "goontek", type: "clearPrefs" }, "*");
+  } catch {}
+  // Give the frame a moment to clear before the reload takes effect.
+  setTimeout(() => {
+    fits.delete(tab.id);
+    clearFit(frame);
+    frame.src = "about:blank";
+    frame.src = tab.url;
+  }, 80);
 }
 
 function reload() {
@@ -789,6 +815,11 @@ for (const id of Object.keys(UI_KEYS)) {
   });
 }
 
+$("reqMobile").addEventListener("click", () => {
+  $("settingsPanel").hidden = true;
+  requestMobileSite();
+});
+
 $("reportBug").addEventListener("click", () => newTab({ url: BUG_URL }));
 
 $("donate").addEventListener("click", () => {
@@ -950,6 +981,7 @@ const ACTIONS = {
   back: { label: "Back", run: () => go(-1) },
   forward: { label: "Forward", run: () => go(1) },
   favourite: { label: "Favourite", run: toggleFavourite },
+  requestMobile: { label: "Request mobile site", run: requestMobileSite },
   diagnostics: { label: "Diagnostics", run: diagnose },
   settings: { label: "Settings", run: openSettings },
 };
@@ -962,6 +994,7 @@ const DEFAULT_KEYS = {
   back: "Alt+ArrowLeft",
   forward: "Alt+ArrowRight",
   favourite: "Ctrl+D",
+  requestMobile: "Ctrl+Shift+M",
   diagnostics: "Ctrl+Shift+D",
   settings: "Ctrl+,",
 };

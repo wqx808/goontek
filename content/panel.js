@@ -62,10 +62,52 @@
       .catch(() => {});
   });
 
+  // Names a stored desktop-vs-mobile preference tends to use. Deliberately
+  // specific: a bare "view" or "ua" would catch unrelated cookies like
+  // "language" or "review_count".
+  const PREF = /desktop|mobile|platform|device_?type|fullsite|full_site|no_?mobile|use_?desktop|preferred?_?view|view_?mode|layout_?pref|skin|responsive/i;
+
+  // Expire this document's own JS-readable cookies whose name looks like a
+  // desktop/mobile preference, and drop matching storage keys. Runs in the
+  // frame's origin, so no extension cookie permission is needed — but it cannot
+  // touch HttpOnly cookies (server-only preferences need a clean profile).
+  // Returns what it cleared, for the panel to show.
+  function clearPrefs() {
+    const cleared = { cookies: [], storage: [] };
+    const expiry = "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+    const registrable = location.hostname.split(".").slice(-2).join(".");
+    try {
+      for (const pair of document.cookie.split(";")) {
+        const name = pair.split("=")[0].trim();
+        if (name && PREF.test(name)) {
+          document.cookie = name + expiry;
+          document.cookie = name + expiry + "; domain=." + registrable;
+          cleared.cookies.push(name);
+        }
+      }
+    } catch {}
+    for (const store of [localStorage, sessionStorage]) {
+      try {
+        const keys = [];
+        for (let i = 0; i < store.length; i += 1) keys.push(store.key(i));
+        for (const k of keys) {
+          if (k && PREF.test(k)) {
+            store.removeItem(k);
+            cleared.storage.push(k);
+          }
+        }
+      } catch {}
+    }
+    return cleared;
+  }
+
   window.addEventListener("message", (event) => {
     const msg = event.data;
     if (!msg || msg.source !== "goontek") return;
-    if (msg.type === "volume") {
+    if (msg.type === "clearPrefs") {
+      const cleared = clearPrefs();
+      parent.postMessage({ source: "goontek", type: "cleared", cleared }, "*");
+    } else if (msg.type === "volume") {
       volume = Math.min(1, Math.max(0, Number(msg.value) || 0));
       muted = volume === 0 || Boolean(msg.muted);
       applyAll();
