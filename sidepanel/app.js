@@ -69,6 +69,20 @@ async function init() {
     chrome.runtime.sendMessage({ type: "goontek:frame-domains", urls }).catch(() => {});
   }
 
+  // A saved width from an older build may no longer be offered; snap it to the
+  // nearest option so the control never renders blank.
+  const widthOptions = [...$("width").options].map((o) => o.value);
+  if (!widthOptions.includes(String(config.width))) {
+    const n = Number(config.width);
+    config.width = Number.isFinite(n)
+      ? Number(
+          widthOptions
+            .filter((v) => v !== "auto")
+            .reduce((best, v) => (Math.abs(v - n) < Math.abs(best - n) ? v : best))
+        )
+      : "auto";
+    saveConfig();
+  }
   $("width").value = String(config.width);
   applyAppearance();
   renderVolume();
@@ -631,19 +645,6 @@ $("mute").addEventListener("click", () => {
 $("newtab").addEventListener("click", () => newTab());
 $("refresh").addEventListener("click", reload);
 
-// Fullscreen inside a side panel is unreliable and varies by player, so offer
-// Picture-in-Picture directly. The frame picks the playing (or largest) video.
-$("pip").addEventListener("click", () => {
-  const tab = activeTab();
-  const frame = tab && frames.get(tab.id);
-  if (!frame || !tab.url) {
-    toast("Nothing loaded");
-    return;
-  }
-  try {
-    frame.contentWindow?.postMessage({ source: "goontek", type: "pip" }, "*");
-  } catch {}
-});
 
 $("clear").addEventListener("click", async () => {
   if (visited.length === 0) {

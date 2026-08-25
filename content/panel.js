@@ -95,6 +95,71 @@
   });
   document.addEventListener("fullscreenerror", (e) => toPiP(e.target));
 
+  // Picture-in-Picture requires a user gesture in THIS document. A postMessage
+  // from the panel carries no activation across the frame boundary (verified:
+  // NotAllowedError), so a button in the panel can never start PiP. The only
+  // thing that works is a real click inside the frame, so provide one.
+  //
+  // It appears only when the frame actually has a usable video, and hides while
+  // PiP is already running.
+  let pipBtn = null;
+  function syncPipButton() {
+    let usable = null;
+    for (const v of document.querySelectorAll("video")) {
+      if (!v.disablePictureInPicture && (v.readyState > 0 || v.currentSrc || v.srcObject)) {
+        usable = v;
+        break;
+      }
+    }
+    const wanted =
+      usable && document.pictureInPictureEnabled && !document.pictureInPictureElement;
+
+    if (!wanted) {
+      if (pipBtn) pipBtn.style.display = "none";
+      return;
+    }
+    if (!pipBtn) {
+      pipBtn = document.createElement("button");
+      pipBtn.type = "button";
+      pipBtn.textContent = "Pop out";
+      pipBtn.title = "Play in a floating window (Picture-in-Picture)";
+      pipBtn.setAttribute("aria-label", "Play in a floating window");
+      // all:initial so the host page's styles cannot distort it.
+      pipBtn.style.cssText = [
+        "all: initial",
+        "position: fixed",
+        "right: 10px",
+        "bottom: 10px",
+        "z-index: 2147483647",
+        "font: 600 12px/1 -apple-system, system-ui, sans-serif",
+        "padding: 8px 12px",
+        "border-radius: 999px",
+        "background: rgba(20,20,20,0.82)",
+        "color: #fff",
+        "cursor: pointer",
+        "box-shadow: 0 2px 10px rgba(0,0,0,0.35)",
+      ].join(";");
+      pipBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Synchronous: keeps the click's user activation, which PiP requires.
+        toPiP(null);
+      });
+      (document.body || document.documentElement).appendChild(pipBtn);
+    }
+    pipBtn.style.display = "block";
+  }
+
+  const watchForVideo = () => {
+    syncPipButton();
+    setInterval(syncPipButton, 1000);
+    document.addEventListener("play", syncPipButton, true);
+    document.addEventListener("enterpictureinpicture", syncPipButton, true);
+    document.addEventListener("leavepictureinpicture", syncPipButton, true);
+  };
+  if (document.body) watchForVideo();
+  else document.addEventListener("DOMContentLoaded", watchForVideo, { once: true });
+
   // Names a stored desktop-vs-mobile preference tends to use. Deliberately
   // specific: a bare "view" or "ua" would catch unrelated cookies like
   // "language" or "review_count".
