@@ -27,6 +27,40 @@ const MOBILE_UA =
 // registration looks identical to an extension that simply does nothing.
 let lastSyncError = null;
 
+// Registrable domains the user has opened in the panel. The framing and UA
+// rules extend to sub-frame requests these initiate, so in-frame link clicks
+// (which the site, not the extension, initiates) are covered. Capped so a long
+// session cannot grow the rule without bound.
+const panelDomains = new Set();
+const MAX_PANEL_DOMAINS = 100;
+
+/** Registrable domain of a URL: drops the subdomain, keeps common SLD+ccTLD. */
+function registrableDomain(url) {
+  let host;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return null;
+  }
+  if (!host || /^[\d.]+$/.test(host)) return null; // skip IPs
+  const parts = host.split(".");
+  if (parts.length <= 2) return host;
+  const slds = new Set(["co", "com", "org", "net", "gov", "edu", "ac", "or", "ne", "go"]);
+  const take = slds.has(parts[parts.length - 2]) && parts[parts.length - 1].length === 2 ? 3 : 2;
+  return parts.slice(-take).join(".");
+}
+
+/** Note a domain the panel loaded; rebuild rules if it is new. */
+async function notePanelDomain(url) {
+  const domain = registrableDomain(url);
+  if (!domain || panelDomains.has(domain)) return;
+  if (panelDomains.size >= MAX_PANEL_DOMAINS) {
+    panelDomains.delete(panelDomains.values().next().value); // drop oldest
+  }
+  panelDomains.add(domain);
+  await syncRules();
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   await sync();
@@ -44,7 +78,17 @@ chrome.commands.onCommand.addListener((command) => {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg?.type) {
     case "goontek:visited":
+      // Register the domain for framing/UA coverage, then scrub from history.
+      notePanelDomain(msg.url);
       scrubUrls([msg.url]).then(() => sendResponse({ ok: true }));
+      return true;
+
+    case "goontek:frame-domains":
+      // Panel reports its open tabs' domains on init, so a restarted worker
+      // (which loses the in-memory set) recovers coverage without a reload.
+      Promise.all((msg.urls || []).map(notePanelDomain)).then(() =>
+        sendResponse({ ok: true })
+      );
       return true;
 
     case "goontek:clear-history":
@@ -111,6 +155,18 @@ async function sync() {
 async function syncRules() {
   const self = chrome.runtime.id;
 
+  // The framing and User-Agent rules apply to sub-frame requests initiated by
+  // the extension (the first load, which the panel drives) OR by a site the
+  // user has actually opened in the panel. The latter is needed because when
+  // the user clicks a link inside the frame, the frame navigates itself and
+  // the request is initiated by that site's origin, not the extension — so
+  // without its domain here, the video page's X-Frame-Options refuses to frame.
+  //
+  // This is narrower than stripping every sub-frame browser-wide: only domains
+  // the user deliberately loaded into the panel are affected, and only while
+  // they remain in the set.
+  const initiators = [self, ...panelDomains];
+
   const addRules = [
     {
       id: RULE_FRAME_HEADERS,
@@ -124,7 +180,7 @@ async function syncRules() {
           { header: "frame-options", operation: "remove" },
         ],
       },
-      condition: { resourceTypes: ["sub_frame"], initiatorDomains: [self] },
+      condition: { resourceTypes: ["sub_frame"], initiatorDomains: initiators },
     },
   ];
 
@@ -143,12 +199,9 @@ async function syncRules() {
         { header: "sec-ch-ua-platform", operation: "remove" },
       ],
     },
-    // sub_frame only. An xmlhttprequest condition cannot match here: requests a
-    // framed page makes are attributed to that page's origin, not to the
-    // extension, so initiatorDomains never matches them.
     condition: {
       resourceTypes: ["sub_frame"],
-      initiatorDomains: [self],
+      initiatorDomains: initiators,
     },
   });
 

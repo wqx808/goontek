@@ -61,6 +61,13 @@ async function init() {
   }
   if (tabs.length === 0) newTab({ focus: false });
 
+  // Tell the worker which domains are already open, so its framing/UA rules
+  // cover in-frame navigation even if it restarted and lost its in-memory set.
+  const urls = tabs.map((t) => t.url).filter(Boolean);
+  if (urls.length) {
+    chrome.runtime.sendMessage({ type: "goontek:frame-domains", urls }).catch(() => {});
+  }
+
   $("width").value = String(config.width);
   applyAppearance();
   renderVolume();

@@ -45,8 +45,10 @@ URLs from history. Your tabs survive, so reopening puts you back where you were.
 - **Cookies are not isolated.** Framed pages share your normal profile's cookie
   jar; Manifest V3 offers no per-frame container. Use a separate browser profile
   if you need real isolation.
-- **Not every site will load.** Sites that detect framing in JavaScript, such as
-  most login flows and banks, will refuse.
+- **Not every site will load.** `X-Frame-Options` and CSP framing headers are
+  stripped for sites you open in the panel (including links you click within
+  them), but sites that detect framing in JavaScript — most login flows and
+  banks — will still refuse.
 - It makes no network requests of its own. `<all_urls>` is needed because the
   panel can load any site; the `history` permission is only ever used to delete.
 
