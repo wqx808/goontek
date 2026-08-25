@@ -136,6 +136,9 @@
       writable: true,
       configurable: true,
     });
+    // Record that the interception is in place, so diagnostics can tell
+    // "never patched" apart from "patched but the player never called it".
+    document.documentElement.setAttribute("data-goontek-fs", "1");
   } catch {}
 
   // Touch capability: many sites branch on these existing at all.

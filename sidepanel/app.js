@@ -1008,6 +1008,8 @@ async function diagnose() {
       const mw = pong.mainWorld;
       lines.push("  -- what the SITE sees (main world) --");
       lines.push(`  main patch   ${pong.mobilePatched ? "applied" : "DID NOT RUN"}`);
+      lines.push(`  fullscreen api ${pong.fsPatched ? "intercepted" : "NOT PATCHED"}`);
+      lines.push(`  theater open ${pong.inTheater}`);
       if (mw) {
         lines.push(`  UA           ${mw.ua}`);
         lines.push(`  platform     ${mw.platform}`);

@@ -111,7 +111,15 @@
   let volume = 1;
   let muted = false;
 
-  function applyTo(el) {
+  // Media the panel's volume has already been applied to. After that, the
+  // page and the user own it: pressing the site's own mute button must stick.
+  // Without this the panel re-asserts its state on every DOM mutation, which
+  // un-mutes the video the instant the player's controls redraw.
+  const levelled = new WeakSet();
+
+  function applyTo(el, force) {
+    if (!force && levelled.has(el)) return;
+    levelled.add(el);
     try {
       el.volume = volume;
       el.muted = muted;
@@ -120,8 +128,9 @@
     }
   }
 
-  function applyAll() {
-    for (const el of document.querySelectorAll("video, audio")) applyTo(el);
+  /** force: the panel's slider moved, which overrides whatever the page set. */
+  function applyAll(force) {
+    for (const el of document.querySelectorAll("video, audio")) applyTo(el, force);
   }
 
   // Tell the panel which document is showing. The panel cannot read the URL of
@@ -352,6 +361,7 @@
     document.dispatchEvent(new Event("webkitfullscreenchange"));
 
     document.addEventListener("keydown", onTheaterKey, true);
+    document.addEventListener("click", onTheaterClick, true);
     syncVideoControls();
     notifyLayoutChanged(video, true);
   }
@@ -374,6 +384,7 @@
     document.dispatchEvent(new Event("webkitfullscreenchange"));
 
     document.removeEventListener("keydown", onTheaterKey, true);
+    document.removeEventListener("click", onTheaterClick, true);
     syncVideoControls();
     notifyLayoutChanged(video, false);
   }
@@ -404,6 +415,37 @@
     };
     fire();
     setTimeout(fire, 250);
+  }
+
+  // Anything that looks like a fullscreen control, by any of the ways players
+  // label one.
+  const FS_CONTROL = [
+    ".ytp-fullscreen-button",
+    '[class*="fullscreen" i]',
+    '[class*="full-screen" i]',
+    '[id*="fullscreen" i]',
+    '[aria-label*="fullscreen" i]',
+    '[aria-label*="full screen" i]',
+    '[title*="fullscreen" i]',
+    '[title*="full screen" i]',
+    '[data-tooltip-target-id*="fullscreen" i]',
+  ].join(",");
+
+  /**
+   * Exit when the player's own fullscreen control is clicked.
+   *
+   * The Fullscreen API is already intercepted in the main world, but not every
+   * player routes through it — mobile players in particular often implement
+   * "fullscreen" as their own layout change and never call the API, so nothing
+   * arrives to toggle. Catching the click works whatever the player does
+   * internally, and only runs while theater is open.
+   */
+  function onTheaterClick(e) {
+    const el = e.target && e.target.closest && e.target.closest(FS_CONTROL);
+    if (!el) return;
+    e.preventDefault();
+    e.stopPropagation();
+    exitTheater();
   }
 
   function onTheaterKey(e) {
@@ -523,7 +565,7 @@
     } else if (msg.type === "volume") {
       volume = Math.min(1, Math.max(0, Number(msg.value) || 0));
       muted = volume === 0 || Boolean(msg.muted);
-      applyAll();
+      applyAll(true);
     } else if (msg.type === "ping") {
       // Diagnostics. Reaching this at all proves the content script registered
       // and its extension-frame guard passed.
@@ -578,6 +620,8 @@
           // Set by content/mobile.js in the main world; absent means it did
           // not run, even though this isolated-world script did.
           mobilePatched: doc.hasAttribute("data-goontek-ua"),
+          fsPatched: doc.hasAttribute("data-goontek-fs"),
+          inTheater: doc.hasAttribute("data-goontek-theater"),
           viewport: viewport ? viewport.content : null,
           readyState: document.readyState,
           // The decisive fields: what the site actually sees. If the UA is an
@@ -613,17 +657,16 @@
 
   // Catch media that appears later, or that resets its own volume on play.
   document.addEventListener("play", (e) => {
-    if (e.target instanceof HTMLMediaElement) applyTo(e.target);
+    if (e.target instanceof HTMLMediaElement) applyTo(e.target, false);
   }, true);
 
-  document.addEventListener("volumechange", (e) => {
-    const el = e.target;
-    if (el instanceof HTMLMediaElement && Math.abs(el.volume - volume) > 0.01) applyTo(el);
-  }, true);
 
   const start = () => {
-    applyAll();
-    new MutationObserver(applyAll).observe(document.documentElement, {
+    applyAll(false);
+    // Arrow, not a bare reference: an observer callback is passed the mutation
+    // list, which as a truthy first argument would force a re-assert on every
+    // mutation — the very thing that was overriding the user's mute.
+    new MutationObserver(() => applyAll(false)).observe(document.documentElement, {
       childList: true,
       subtree: true,
     });
