@@ -631,6 +631,20 @@ $("mute").addEventListener("click", () => {
 $("newtab").addEventListener("click", () => newTab());
 $("refresh").addEventListener("click", reload);
 
+// Fullscreen inside a side panel is unreliable and varies by player, so offer
+// Picture-in-Picture directly. The frame picks the playing (or largest) video.
+$("pip").addEventListener("click", () => {
+  const tab = activeTab();
+  const frame = tab && frames.get(tab.id);
+  if (!frame || !tab.url) {
+    toast("Nothing loaded");
+    return;
+  }
+  try {
+    frame.contentWindow?.postMessage({ source: "goontek", type: "pip" }, "*");
+  } catch {}
+});
+
 $("clear").addEventListener("click", async () => {
   if (visited.length === 0) {
     toast("Nothing to clear");
@@ -975,14 +989,25 @@ async function diagnose() {
       lines.push(`  frame zoom     ${frame?.style.zoom || "(none)"}`);
       lines.push(`  fit recorded   ${fits.has(tab.id) ? `${fits.get(tab.id)}px` : "no"}`);
       lines.push("");
-      lines.push("  -- what the site sees --");
-      lines.push(`  UA           ${pong.seenUA || "?"}`);
-      lines.push(`  userAgentData ${JSON.stringify(pong.seenUAData)}`);
-      lines.push(`  platform     ${pong.seenPlatform}`);
-      lines.push(`  touchPoints  ${pong.seenTouchPoints}`);
-      lines.push(`  screen       ${pong.seenScreen}`);
-      lines.push(`  dpr          ${pong.dpr}`);
+      const mw = pong.mainWorld;
+      lines.push("  -- what the SITE sees (main world) --");
       lines.push(`  main patch   ${pong.mobilePatched ? "applied" : "DID NOT RUN"}`);
+      if (mw) {
+        lines.push(`  UA           ${mw.ua}`);
+        lines.push(`  platform     ${mw.platform}`);
+        lines.push(`  touchPoints  ${mw.touch}`);
+        lines.push(`  userAgentData ${mw.uaData}`);
+        lines.push(`  screen       ${mw.screen}`);
+        lines.push(`  dpr          ${mw.dpr}`);
+      } else {
+        lines.push("  (not recorded — main-world script did not run here)");
+      }
+      lines.push("");
+      lines.push("  -- extension's own context (always the real browser) --");
+      lines.push(`  UA           ${pong.seenUA || "?"}`);
+      lines.push("  ^ expected to show your real desktop browser; an isolated");
+      lines.push("    content script has its own navigator and cannot see the");
+      lines.push("    main-world patch. Judge the spoof by the block above.");
       lines.push(`  innerWidth   ${pong.innerWidth}`);
       lines.push(`  scrollWidth  ${pong.scrollWidth}`);
       lines.push(`  viewport meta ${pong.viewport || "(none)"}`);
@@ -1000,7 +1025,7 @@ async function diagnose() {
       lines.push(`  overflow     ${over > 8 ? `${over}px WIDER than viewport` : "none"}`);
       lines.push("");
       lines.push("  -- verdict --");
-      const iphone = /iPhone/.test(pong.seenUA || "");
+      const iphone = /iPhone/.test(mw?.ua || "");
       if (iphone && pong.innerWidth <= 430 && over > 8) {
         lines.push("  Site sees an iPhone UA and a ~phone viewport but still");
         lines.push("  overflows: it is choosing desktop layout from something");

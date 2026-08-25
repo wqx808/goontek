@@ -181,6 +181,15 @@
         localStorage.removeItem("__goontek_probe");
       } catch {}
 
+      // What the page itself sees, recorded by the main-world script. This is
+      // the only meaningful reading: navigator below belongs to the isolated
+      // world and always reports the real browser.
+      let mainWorld = null;
+      try {
+        const raw = doc.getAttribute("data-goontek-seen");
+        if (raw) mainWorld = JSON.parse(raw);
+      } catch {}
+
       let uaData = null;
       try {
         uaData = navigator.userAgentData
@@ -203,6 +212,7 @@
           // iPhone and innerWidth is ~390 but the layout is still desktop, the
           // site is not deciding layout from either — it is server-side or a
           // stored preference, and no client-side spoof can change it.
+          mainWorld,
           seenUA: navigator.userAgent,
           seenUAData: uaData,
           seenPlatform: navigator.platform,

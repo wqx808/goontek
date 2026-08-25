@@ -69,6 +69,21 @@
   // Isolated world cannot see main-world variables, but both see the DOM.
   try {
     document.documentElement.setAttribute("data-goontek-ua", "1");
+    // Also record what the page-facing navigator now reports. An isolated-world
+    // content script has its own navigator and always reads the real browser
+    // values, so reading it there says nothing about whether this patch worked.
+    // The DOM is the only channel between the two worlds.
+    document.documentElement.setAttribute(
+      "data-goontek-seen",
+      JSON.stringify({
+        ua: navigator.userAgent,
+        platform: navigator.platform,
+        touch: navigator.maxTouchPoints,
+        uaData: navigator.userAgentData === undefined ? "absent" : "present",
+        screen: `${screen.width}x${screen.height}`,
+        dpr: window.devicePixelRatio,
+      })
+    );
   } catch {}
 
   // Ensure a mobile viewport even when the server sent desktop markup.
