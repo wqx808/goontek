@@ -24,6 +24,7 @@ Not on the Web Store yet. Needs Chrome 116+.
 | Switch tab | `Ctrl+1` … `Ctrl+8` |
 | Address bar / reload | `Ctrl+L` / `Ctrl+R` |
 | Favourite | `Ctrl+D` |
+| Diagnostics | `Ctrl+Shift+D` |
 | Settings | `Ctrl+,` or the gear |
 | Layout width | dropdown in the panel |
 
@@ -31,7 +32,6 @@ Every shortcut above except tab switching can be rebound under Settings →
 Shortcuts. The two browser-level ones (open panel, hide) are Chrome commands and
 can only be changed at `chrome://extensions/shortcuts`, which the settings panel
 links to.
-| Diagnostics | `Ctrl+Shift+D` |
 
 Hide covers the panel, mutes and pauses every frame, and deletes the session's
 URLs from history. Your tabs survive, so reopening puts you back where you were.
@@ -58,16 +58,25 @@ no way to scope the rules to the side panel. Everything in
 `rules/blocklist.json` is blocked everywhere for as long as Goontek is
 installed, and uninstalling is the only way to turn it off.
 
-## Sites that need more room
+## Width, and why it renders like a phone
 
-Some sites have a hard minimum width and will not reflow into a narrow panel.
-The width dropdown sets the width the page is laid out at, then scales it to fit
-whatever the panel is. `auto` measures the page and only steps in when it
-overflows; pick an explicit width when a site still looks cramped or clipped.
+The width dropdown sets the width the page is *laid out at*, then zooms that to
+fit the panel. This is the single most important control for how a site looks.
 
-Scaling is a trade: at a 500px panel a 1280px layout renders at about 40%, which
-fits everything on screen but is small to read. Widening the panel itself is
-still the better option when you have the room.
+- **phone (390) / phone S (360)** — the default. The page is told it has a
+  ~390px screen, exactly like an iPhone, so responsive sites serve their mobile
+  layout. The result is zoomed up to fill the panel.
+- **tablet (768)** — a middle ground for sites whose phone layout is too sparse.
+- **auto** — lays out at the panel's real width and only intervenes if the page
+  overflows. Good for sites that are already responsive at desktop widths.
+- **desktop (1100 / 1280)** — forces the full desktop layout, zoomed down.
+
+Why a fixed 390 rather than just using the panel width: a side panel is often
+~450–550px, and many sites treat that as a small *desktop* window and serve the
+desktop layout, which then overflows and shrinks. Pinning the layout to 390px is
+unambiguously a phone, so the mobile layout wins — the same reason the site looks
+right on an actual iPhone. Zooming up to fill the panel is done with CSS `zoom`,
+so text stays sharp rather than blurring.
 
 ## Something not rendering?
 

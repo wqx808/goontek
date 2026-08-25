@@ -23,7 +23,9 @@ let config = {
   volume: 1,
   muted: false,
   favourites: [],
-  width: "auto",
+  // A phone-width layout by default. See the width dropdown for why this,
+  // rather than "auto", is what makes sites render the way they do on a phone.
+  width: 390,
   theme: "system",
   accent: "",
   search: "duckduckgo",
@@ -173,11 +175,16 @@ function frameFor(tab) {
       // Media state resets on every navigation.
       pushVolume(frame);
       // So does layout. This fires for navigations *inside* the frame too,
-      // which the panel otherwise never hears about; without it the width
-      // measured for the first page sticks for every page after it.
+      // which the panel otherwise never hears about.
       if (config.width === "auto") {
+        // Auto waits for the page to report an overflow before doing anything;
+        // a stale measurement from the previous page must not carry over.
         fits.delete(id);
         clearFit(frame);
+      } else {
+        // An explicit width applies immediately, whether or not the page
+        // overflows — that is the whole point of forcing a phone width.
+        applyFit(id);
       }
     });
     frames.set(tab.id, frame);
@@ -259,7 +266,11 @@ function applyFit(id) {
   const scale = width / target;
   frame.style.width = `${target}px`;
   frame.style.height = `${Math.ceil(height / scale)}px`;
-  frame.style.transform = `scale(${scale})`;
+  // `zoom`, not `transform: scale()`. Two reasons: zoom re-rasterises at the
+  // target size so scaling up (phone mode) stays sharp instead of blurring,
+  // and it creates no transformed ancestor, which is what breaks a video's
+  // fullscreen inside the frame.
+  frame.style.zoom = String(scale);
 }
 
 function applyFitAll() {
@@ -276,6 +287,7 @@ $("width").addEventListener("change", (e) => {
 function clearFit(frame) {
   frame.style.width = "";
   frame.style.height = "";
+  frame.style.zoom = "";
   frame.style.transform = "";
 }
 
