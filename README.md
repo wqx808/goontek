@@ -1,4 +1,4 @@
-<img src="icons/wordmark.jpg" alt="goontek" width="420">
+<img src="icons/wordmark.jpg" alt="goontek" width="100%">
 
 A private browsing panel for Chromium browsers. Dock any site in the side panel
 with its own tabs, blocked ads, no history, and a hide key.
