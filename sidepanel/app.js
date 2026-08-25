@@ -31,6 +31,7 @@ let config = {
   search: "duckduckgo",
   maxTabs: 8,
   scrubOnHide: true,
+  adblock: true,
   ui: {}, // checkbox id -> false when that control is hidden
   keys: null, // filled from DEFAULT_KEYS on first run
 };
@@ -334,6 +335,21 @@ function historyFor(id) {
 
 function recordVisit(id, url) {
   if (typeof url !== "string" || url === "about:blank") return;
+
+  // Keep the tab's own URL, the address bar, tab label, and favourite star in
+  // sync with where the frame actually is — the frame navigates itself on link
+  // clicks, and the panel only learns the new URL from this report.
+  const tab = tabs.find((t) => t.id === id);
+  if (tab && tab.url !== url) {
+    tab.url = url;
+    if (id === activeId) {
+      urlInput.value = url;
+      renderFavStar();
+    }
+    renderTabs();
+    saveSession();
+  }
+
   const h = historyFor(id);
 
   // A visit we caused by going back or forward is already in the stack.
@@ -731,6 +747,7 @@ function renderSettings() {
   $("setMaxTabs").value = String(config.maxTabs);
   $("setSearch").value = config.search;
   $("setScrubOnHide").checked = config.scrubOnHide !== false;
+  $("setAdblock").checked = config.adblock !== false;
   renderKeys();
 
   for (const id of Object.keys(UI_KEYS)) {
@@ -826,6 +843,13 @@ $("setSearch").addEventListener("change", (e) => {
 $("setScrubOnHide").addEventListener("change", (e) => {
   config.scrubOnHide = e.target.checked;
   saveConfig();
+});
+
+$("setAdblock").addEventListener("change", async (e) => {
+  config.adblock = e.target.checked;
+  await saveConfig();
+  await chrome.runtime.sendMessage({ type: "goontek:sync" }).catch(() => {});
+  toast(config.adblock ? "Ad blocking on" : "Ad blocking off");
 });
 
 for (const id of Object.keys(UI_KEYS)) {

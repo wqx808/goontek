@@ -91,6 +91,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       );
       return true;
 
+    case "goontek:sync":
+      // A setting that affects the network rules (e.g. ad blocking) changed.
+      syncRules().then(() => sendResponse({ ok: true }));
+      return true;
+
     case "goontek:clear-history":
       scrubUrls(msg.urls || []).then((n) => sendResponse({ ok: true, count: n }));
       return true;
@@ -205,7 +210,9 @@ async function syncRules() {
     },
   });
 
-  const domains = await loadBlocklist();
+  const cfg = (await chrome.storage.local.get("goontek:config"))["goontek:config"] || {};
+  const adblockOn = cfg.adblock !== false; // default on
+  const domains = adblockOn ? await loadBlocklist() : [];
   if (domains.length) {
     addRules.push({
       id: RULE_ADBLOCK,

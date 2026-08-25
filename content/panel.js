@@ -34,33 +34,66 @@
 
   // Tell the panel which document is showing. The panel cannot read the URL of
   // a cross-origin frame, so without this it never learns about navigations
-  // that happen inside the frame, and cannot offer back or forward.
+  // that happen inside the frame, and cannot keep the address bar or back and
+  // forward in sync.
+  //
+  // Only the top framed document reports. A nested iframe (an ad, a player) has
+  // more than one ancestor origin, and its URL is not what belongs in the
+  // address bar.
+  const isTopFramed = (location.ancestorOrigins || []).length === 1;
+  let lastAnnounced = null;
   const announce = () => {
+    if (!isTopFramed || location.href === lastAnnounced) return;
+    lastAnnounced = location.href;
     parent.postMessage({ source: "goontek", type: "located", url: location.href }, "*");
   };
   announce();
   document.addEventListener("DOMContentLoaded", announce, { once: true });
+  // Catch in-page navigation that fires no load event.
+  window.addEventListener("popstate", announce);
+  window.addEventListener("hashchange", announce);
+  // pushState/replaceState fire no event; poll cheaply for URL changes the
+  // other hooks miss (SPA route changes). Stops mattering once the tab closes.
+  setInterval(announce, 700);
 
-  document.addEventListener("fullscreenchange", () => {
-    const el = document.fullscreenElement;
-    parent.postMessage({ source: "goontek", type: "fullscreen", on: Boolean(el) }, "*");
-    if (!el) return;
+  // Pick the video most likely meant: the one playing, else the largest.
+  function pickVideo(hint) {
+    if (hint && hint.tagName === "VIDEO") return hint;
+    if (hint && hint.querySelector) {
+      const inside = hint.querySelector("video");
+      if (inside) return inside;
+    }
+    const vids = [...document.querySelectorAll("video")];
+    const playing = vids.find((v) => !v.paused && !v.ended && v.readyState > 2);
+    if (playing) return playing;
+    return vids.sort(
+      (a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight
+    )[0];
+  }
 
-    // A side panel cannot give a video the whole monitor; fullscreen just fills
-    // the narrow panel. Picture-in-Picture floats free of the panel, so convert
-    // to it. This runs in the same task as the user's fullscreen click, which is
-    // what lets the PiP request keep its activation. Exit fullscreen only if PiP
-    // actually starts, so a site whose player forbids PiP is left as it was.
-    const video = el.tagName === "VIDEO" ? el : el.querySelector && el.querySelector("video");
+  function toPiP(hint) {
+    const video = pickVideo(hint);
     if (!video || !document.pictureInPictureEnabled || video.disablePictureInPicture) return;
-
+    if (document.pictureInPictureElement === video) return;
     video
       .requestPictureInPicture()
       .then(() => {
         if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       })
       .catch(() => {});
+  }
+
+  // A side panel cannot give a video the whole monitor. Fullscreen either fills
+  // just the narrow panel or is rejected outright; Picture-in-Picture floats
+  // free of the panel, so hand off to it in both cases. Both handlers run in the
+  // same task as the user's fullscreen click, which preserves the activation the
+  // PiP request needs.
+  document.addEventListener("fullscreenchange", () => {
+    const el = document.fullscreenElement;
+    parent.postMessage({ source: "goontek", type: "fullscreen", on: Boolean(el) }, "*");
+    if (el) toPiP(el);
   });
+  document.addEventListener("fullscreenerror", (e) => toPiP(e.target));
 
   // Names a stored desktop-vs-mobile preference tends to use. Deliberately
   // specific: a bare "view" or "ua" would catch unrelated cookies like
@@ -107,6 +140,8 @@
     if (msg.type === "clearPrefs") {
       const cleared = clearPrefs();
       parent.postMessage({ source: "goontek", type: "cleared", cleared }, "*");
+    } else if (msg.type === "pip") {
+      toPiP(null);
     } else if (msg.type === "volume") {
       volume = Math.min(1, Math.max(0, Number(msg.value) || 0));
       muted = volume === 0 || Boolean(msg.muted);
