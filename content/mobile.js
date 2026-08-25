@@ -55,48 +55,78 @@
   define(screen, "pixelDepth", 24);
   define(window, "devicePixelRatio", 3);
 
-  // iOS video fullscreen shim.
+  // Fullscreen interception.
   //
-  // Claiming to be an iPhone has a side effect: mobile players target iOS
-  // Safari, whose <video> exposes webkitEnterFullscreen(). Desktop Chrome has
-  // no such method, so a player that takes the iOS path calls undefined and its
-  // fullscreen button silently does nothing. Provide the method, backed by
-  // Picture-in-Picture, which actually escapes the side panel — a side panel
-  // cannot give a video the whole monitor anyway.
+  // A side panel cannot go fullscreen: a real requestFullscreen either fills
+  // only the narrow panel or is refused, and players that take the iOS path
+  // call video.webkitEnterFullscreen(), which does not exist in desktop Chrome
+  // at all — so the button silently does nothing.
+  //
+  // Route every route to the panel's theater view instead. The handler lives in
+  // the isolated world, and a CustomEvent on the shared document is the way to
+  // reach it from here.
+  const askTheater = (type) => {
+    try {
+      document.dispatchEvent(new CustomEvent("goontek:theater-" + type));
+    } catch {}
+    return Promise.resolve();
+  };
+  const inTheater = () => document.documentElement.hasAttribute("data-goontek-theater");
+
   try {
-    const VP = HTMLVideoElement.prototype;
-    if (typeof VP.webkitEnterFullscreen !== "function") {
-      Object.defineProperty(VP, "webkitSupportsFullscreen", {
-        get: () => true,
-        configurable: true,
-      });
-      Object.defineProperty(VP, "webkitDisplayingFullscreen", {
-        get() {
-          return document.pictureInPictureElement === this || document.fullscreenElement === this;
-        },
-        configurable: true,
-      });
-      Object.defineProperty(VP, "webkitEnterFullscreen", {
+    for (const name of ["requestFullscreen", "webkitRequestFullscreen", "webkitRequestFullScreen", "mozRequestFullScreen", "msRequestFullscreen"]) {
+      Object.defineProperty(Element.prototype, name, {
         value: function () {
-          const toFullscreen = () => this.requestFullscreen && this.requestFullscreen().catch(() => {});
-          if (document.pictureInPictureEnabled && !this.disablePictureInPicture) {
-            this.requestPictureInPicture().catch(toFullscreen);
-          } else {
-            toFullscreen();
-          }
-        },
-        writable: true,
-        configurable: true,
-      });
-      Object.defineProperty(VP, "webkitExitFullscreen", {
-        value: function () {
-          if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
-          else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+          return askTheater("enter");
         },
         writable: true,
         configurable: true,
       });
     }
+    for (const name of ["exitFullscreen", "webkitExitFullscreen", "webkitCancelFullScreen", "mozCancelFullScreen", "msExitFullscreen"]) {
+      Object.defineProperty(Document.prototype, name, {
+        value: function () {
+          return askTheater("exit");
+        },
+        writable: true,
+        configurable: true,
+      });
+    }
+
+    // Report theater as fullscreen, so a player's button toggles correctly
+    // rather than trying to enter again, and its icon reflects the state.
+    const currentEl = () =>
+      inTheater() ? document.querySelector("video[data-goontek-tv]") : null;
+    for (const name of ["fullscreenElement", "webkitFullscreenElement", "webkitCurrentFullScreenElement", "mozFullScreenElement", "msFullscreenElement"]) {
+      Object.defineProperty(Document.prototype, name, { get: currentEl, configurable: true });
+    }
+    for (const name of ["fullscreenEnabled", "webkitFullscreenEnabled", "mozFullScreenEnabled", "msFullscreenEnabled"]) {
+      Object.defineProperty(Document.prototype, name, { get: () => true, configurable: true });
+    }
+
+    // The iOS-only video API, for players that prefer it once the UA says iPhone.
+    const VP = HTMLVideoElement.prototype;
+    Object.defineProperty(VP, "webkitSupportsFullscreen", { get: () => true, configurable: true });
+    Object.defineProperty(VP, "webkitDisplayingFullscreen", {
+      get() {
+        return inTheater() && this.hasAttribute("data-goontek-tv");
+      },
+      configurable: true,
+    });
+    Object.defineProperty(VP, "webkitEnterFullscreen", {
+      value: function () {
+        askTheater("enter");
+      },
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(VP, "webkitExitFullscreen", {
+      value: function () {
+        askTheater("exit");
+      },
+      writable: true,
+      configurable: true,
+    });
   } catch {}
 
   // Touch capability: many sites branch on these existing at all.

@@ -110,9 +110,11 @@ is wider than the panel.
 A side panel cannot go fullscreen, so a video gets two controls of its own,
 shown in the corner of the page whenever one is playing:
 
-- **Theater** blacks out the page and fills the panel with the video. Escape or
-  **Exit** returns. The video is restyled where it sits and never moved in the
-  DOM, so playback (including streamed/MSE video such as YouTube) is unaffected.
+- **Theater** blacks out the page and fills the panel with the video. The
+  player's own fullscreen button triggers it too, since a side panel cannot
+  really go fullscreen. Escape, **Exit**, or the player's button again returns.
+  The video is restyled where it sits and never moved in the DOM, so playback
+  (including streamed/MSE video such as YouTube) is unaffected.
 - **Pop out** puts it in a floating Picture-in-Picture window outside the panel.
 
 They live in the page rather than the panel because Picture-in-Picture needs a

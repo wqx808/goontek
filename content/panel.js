@@ -149,13 +149,65 @@
 
   let theater = null;
 
+  // Fill the panel with the video.
+  //
+  // The hard part is that z-index and position:fixed are scoped to the nearest
+  // ancestor with a transform, filter, perspective or containment — which video
+  // players are full of. Promoting only the <video> leaves it trapped inside
+  // that ancestor and hidden behind the backdrop, which reads as "everything
+  // went black". So every ancestor from the video up to <body> is lifted to
+  // fill the viewport too, with those properties neutralised, which makes the
+  // chain escape cleanly at each level.
+  //
+  // Nothing is re-parented and no source is touched, so streamed (MSE/blob)
+  // playback such as YouTube keeps running.
+  const LIFT = [
+    "position: fixed !important",
+    "top: 0 !important",
+    "left: 0 !important",
+    "right: auto !important",
+    "bottom: auto !important",
+    "width: 100vw !important",
+    "height: 100vh !important",
+    "max-width: none !important",
+    "max-height: none !important",
+    "min-width: 0 !important",
+    "min-height: 0 !important",
+    "margin: 0 !important",
+    "padding: 0 !important",
+    "background: #000 !important",
+    "border: 0 !important",
+    "border-radius: 0 !important",
+    "outline: 0 !important",
+    "box-shadow: none !important",
+    "opacity: 1 !important",
+    "visibility: visible !important",
+    "display: block !important",
+    "overflow: visible !important",
+    // These are what create a containing block / stacking context and trap the
+    // element. Clearing them is the whole trick.
+    "transform: none !important",
+    "filter: none !important",
+    "perspective: none !important",
+    "will-change: auto !important",
+    "contain: none !important",
+    "clip-path: none !important",
+    "z-index: " + Z_VIDEO + " !important",
+  ].join(";");
+
   function enterTheater() {
     if (theater) return;
     const video = pickVideo(null);
     if (!video) return;
 
+    // The video plus every ancestor below <body>.
+    const chain = [];
+    for (let el = video; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+      chain.push(el);
+    }
+
     const saved = {
-      cssText: video.style.cssText,
+      styles: chain.map((el) => ({ el, cssText: el.style.cssText })),
       controls: video.controls,
       overflow: document.documentElement.style.overflow,
     };
@@ -166,20 +218,10 @@
       "background: #000; z-index: " + Z_BACKDROP + ";";
     (document.body || document.documentElement).appendChild(backdrop);
 
-    // Promote the element where it stands. Re-parenting or re-sourcing a video
-    // is what breaks MSE/blob playback (YouTube), so never do either — only
-    // its own styles change, and the media stays untouched.
-    video.style.cssText =
-      "position: fixed !important; top: 0 !important; left: 0 !important;" +
-      "width: 100vw !important; height: 100vh !important; max-width: none !important;" +
-      "max-height: none !important; margin: 0 !important; padding: 0 !important;" +
-      "object-fit: contain !important; background: #000 !important;" +
-      // Kill decoration the page's stylesheet may have put on the element.
-      "border: 0 !important; border-radius: 0 !important; outline: 0 !important;" +
-      "box-shadow: none !important; transform: none !important; inset: 0 !important;" +
-      "z-index: " + Z_VIDEO + " !important;";
-    // The site's own controls are behind the backdrop now, so make sure there
-    // is still a way to scrub and pause.
+    for (const el of chain) el.style.cssText += ";" + LIFT;
+    // Only the video letterboxes; the containers are plain black fill.
+    video.style.cssText += ";object-fit: contain !important;";
+    // The page's own controls are behind the backdrop now.
     video.controls = true;
     document.documentElement.style.overflow = "hidden";
 
@@ -188,6 +230,14 @@
     (document.body || document.documentElement).appendChild(exit);
 
     theater = { video, backdrop, exit, saved };
+
+    // Let the page believe it is fullscreen, so its own button toggles back out
+    // and its UI updates. mobile.js reads these in the main world.
+    document.documentElement.setAttribute("data-goontek-theater", "1");
+    video.setAttribute("data-goontek-tv", "1");
+    document.dispatchEvent(new Event("fullscreenchange"));
+    document.dispatchEvent(new Event("webkitfullscreenchange"));
+
     document.addEventListener("keydown", onTheaterKey, true);
     syncVideoControls();
   }
@@ -195,15 +245,28 @@
   function exitTheater() {
     if (!theater) return;
     const { video, backdrop, exit, saved } = theater;
-    video.style.cssText = saved.cssText;
+    for (const { el, cssText } of saved.styles) el.style.cssText = cssText;
     video.controls = saved.controls;
     document.documentElement.style.overflow = saved.overflow;
     backdrop.remove();
     exit.remove();
     theater = null;
+
+    document.documentElement.removeAttribute("data-goontek-theater");
+    video.removeAttribute("data-goontek-tv");
+    document.dispatchEvent(new Event("fullscreenchange"));
+    document.dispatchEvent(new Event("webkitfullscreenchange"));
+
     document.removeEventListener("keydown", onTheaterKey, true);
     syncVideoControls();
   }
+
+  // The page's fullscreen button routes here: mobile.js intercepts the
+  // Fullscreen API in the main world and re-emits it as these events, because
+  // a side panel cannot actually go fullscreen.
+  document.addEventListener("goontek:theater-enter", enterTheater);
+  document.addEventListener("goontek:theater-exit", exitTheater);
+
 
   function onTheaterKey(e) {
     if (e.key === "Escape") {
