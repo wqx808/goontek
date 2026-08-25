@@ -104,12 +104,12 @@
         </section>
 
         <section>
-          <h3>Show in panel</h3>
+          <h3>Panel</h3>
           <label class="row"><span>Favourites</span><input type="checkbox" id="uiFavourites" /></label>
           <label class="row"><span>Volume</span><input type="checkbox" id="uiVolume" /></label>
           <label class="row"><span>Width</span><input type="checkbox" id="uiWidth" /></label>
-          <label class="row"><span>Clear history</span><input type="checkbox" id="uiClear" /></label>
-          <label class="row"><span>Hide</span><input type="checkbox" id="uiHide" /></label>
+          <label class="row"><span>Clear history button</span><input type="checkbox" id="uiClear" /></label>
+          <label class="row"><span>Hide button</span><input type="checkbox" id="uiHide" /></label>
         </section>
 
         <section>
@@ -139,43 +139,42 @@
             <span>Block ads and trackers</span>
             <input type="checkbox" id="setAdblock" />
           </label>
-          <p class="note">Blocks known ad/tracker domains browser-wide while
-            Goontek is installed. Can't stop ads a site serves from its own
-            domain.</p>
+          <p class="note">Blocks known ad and tracker domains browser-wide while
+            it is on. Cannot stop ads a site serves from its own domain.</p>
         </section>
 
         <section>
           <h3>Troubleshooting</h3>
-          <button type="button" id="reqMobile" class="wide">Request mobile version of this site</button>
-          <p class="note">For a site stuck on desktop. Clears its saved desktop
-            preference (may sign you out of that site) and reloads.</p>
-          <button type="button" id="openTab" class="wide">Open this page in a browser tab</button>
-          <p class="note">A side panel cannot give a video the whole monitor. Use
-            the PiP button for a floating window, or open the page in a normal
-            tab where fullscreen works properly.</p>
-          <button type="button" id="showDiag" class="wide">Diagnostics</button>
-          <p class="note">Shows what the current site sees, for debugging. These
-            buttons are the reliable path — keyboard shortcuts do not fire once
-            you have clicked into the page.</p>
+          <button type="button" id="reqMobile" class="wide small">Request mobile version of this site</button>
+          <button type="button" id="openTab" class="wide small">Open this page in a browser tab</button>
+          <button type="button" id="showDiag" class="wide small">Diagnostics</button>
+          <p class="note">For a site stuck on desktop, or a video that will not
+            fill the screen. Requesting mobile may sign you out of that site.</p>
         </section>
 
-        <section>
-          <h3>Shortcuts</h3>
+        <details class="fold">
+          <summary><h3>Shortcuts</h3></summary>
           <div id="keys"></div>
-          <button type="button" id="resetKeys" class="wide">Reset to defaults</button>
-          <button type="button" id="browserKeys" class="wide">Open / hide shortcuts (Chrome)</button>
-        </section>
+          <button type="button" id="resetKeys" class="wide small">Reset to defaults</button>
+          <button type="button" id="browserKeys" class="wide small">Open / hide shortcuts (Chrome)</button>
+        </details>
 
         <section>
           <h3>Support</h3>
-          <button type="button" id="reportBug" class="wide">Report a bug</button>
-          <button type="button" id="donate" class="wide">Donate (Solana)</button>
-          <div id="donateBox" class="donate" hidden>
-            <div id="qr" class="qr"></div>
-            <code id="wallet"></code>
-            <button type="button" id="copyWallet" class="wide">Copy address</button>
-          </div>
+          <button type="button" id="reportBug" class="wide small">Report a bug</button>
+          <button type="button" id="donate" class="wide small">Donate (Solana)</button>
         </section>
+      </div>
+    </div>
+
+    <!-- Donation QR, over everything -->
+    <div class="qr-overlay" id="donateBox" hidden>
+      <div class="qr-card">
+        <img id="qrImg" alt="Solana donation address QR code" />
+        <p class="qr-label">Solana</p>
+        <code id="wallet"></code>
+        <button type="button" id="copyWallet" class="wide small">Copy address</button>
+        <button type="button" id="qrClose" class="wide small">Close</button>
       </div>
     </div>
 

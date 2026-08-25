@@ -901,16 +901,22 @@ $("donate").addEventListener("click", () => {
     toast("No wallet configured yet");
     return;
   }
-  const box = $("donateBox");
-  box.hidden = !box.hidden;
   $("wallet").textContent = SOLANA_WALLET;
-  const qr = $("qr");
-  if (!qr.firstChild) {
-    const img = document.createElement("img");
-    img.src = "../icons/donate-qr.png";
-    img.alt = "Solana donation address QR code";
-    qr.appendChild(img);
-  }
+  const img = $("qrImg");
+  if (!img.getAttribute("src")) img.src = "../icons/donate-qr.png";
+  // Sits above the settings sheet, so the QR is not competing with a long
+  // scrolling list behind it.
+  $("donateBox").hidden = false;
+});
+
+function closeDonate() {
+  $("donateBox").hidden = true;
+}
+
+$("qrClose").addEventListener("click", closeDonate);
+// Clicking the dimmed area dismisses, but not clicks inside the card.
+$("donateBox").addEventListener("click", (e) => {
+  if (e.target === $("donateBox")) closeDonate();
 });
 
 $("copyWallet").addEventListener("click", async () => {
@@ -1164,8 +1170,12 @@ document.addEventListener("keydown", (e) => {
   }
 
   if (e.key === "Escape") {
-    $("settingsPanel").hidden = true;
-    $("diag").hidden = true;
+    // Innermost first, so one press does not close everything at once.
+    if (!$("donateBox").hidden) closeDonate();
+    else {
+      $("settingsPanel").hidden = true;
+      $("diag").hidden = true;
+    }
     return;
   }
 

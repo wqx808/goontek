@@ -552,17 +552,53 @@ select.ghost option { background: var(--surface); color: var(--text); }
   border-radius: 3px;
 }
 
-.donate { margin-top: 10px; text-align: center; }
-.donate[hidden] { display: none; }
-.donate code {
+/* Donation QR, above everything so it is not read against a scrolling list. */
+.qr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.86);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.qr-overlay[hidden] { display: none; }
+
+.qr-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  text-align: center;
+  max-width: 100%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.qr-card img {
+  width: 200px;
+  height: 200px;
+  max-width: 100%;
   display: block;
-  margin: 8px 0;
+  margin: 0 auto 12px;
+  border-radius: 8px;
+  background: #fff;
+  image-rendering: pixelated;
+}
+.qr-label {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.qr-card code {
+  display: block;
+  margin: 0 0 12px;
   font-size: 10px;
+  line-height: 1.5;
   word-break: break-all;
   color: var(--muted);
 }
-.qr { display: flex; justify-content: center; }
-.qr img { width: 160px; height: 160px; image-rendering: pixelated; }
 
 /* ------------------------------------------------------- diagnostics */
 
@@ -648,3 +684,33 @@ body.minimized .stage { display: none; }
   opacity: 0.92;
   transform: translate(-50%, 0);
 }
+
+/* Shortcuts collapse: most people never open it. */
+.fold {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.fold > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::before {
+  content: "";
+  border: 4px solid transparent;
+  border-left-color: var(--muted);
+  transition: transform 120ms ease;
+}
+.fold[open] > summary::before { transform: rotate(90deg) translateX(-2px); }
+.fold > summary h3 { margin: 0; }
+
+/* Secondary buttons: troubleshooting and support are not primary actions. */
+.wide.small {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.wide.small:hover { color: var(--text); }
