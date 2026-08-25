@@ -872,11 +872,29 @@ $("copyWallet").addEventListener("click", async () => {
 // Ctrl+Shift+D. Answers, for the frame you are looking at: did the content
 // scripts register, did they run in this frame, did the main-world mobile
 // patch apply, and is the document wider than the panel.
+/** Resolve `p`, but never wait longer than `ms` — a stalled service worker or
+ *  frame must not leave the panel hanging with nothing shown. */
+function withTimeout(p, ms, fallback) {
+  return Promise.race([
+    Promise.resolve(p).catch((e) => ({ __err: e?.message || String(e) })),
+    new Promise((r) => setTimeout(() => r(fallback), ms)),
+  ]);
+}
+
 async function diagnose() {
+  // Show the panel first, so a click always does something visible even if the
+  // data collection below stalls.
+  $("diagbody").textContent = "Collecting…";
+  $("diag").hidden = false;
+
   const lines = [];
-  const bg = await chrome.runtime
-    .sendMessage({ type: "goontek:diagnose" })
-    .catch((e) => ({ errors: [`service worker unreachable: ${e.message}`] }));
+  const bg =
+    (await withTimeout(
+      chrome.runtime.sendMessage({ type: "goontek:diagnose" }),
+      1500,
+      { errors: ["service worker did not respond in time"] }
+    )) || {};
+  if (bg.__err) bg.errors = [`service worker: ${bg.__err}`];
 
   lines.push(`extension id   ${bg.id || "?"}`);
   lines.push(`dynamic rules  ${bg.rules?.length ? bg.rules.join(", ") : "NONE"}`);
@@ -890,8 +908,8 @@ async function diagnose() {
   if (!tab?.url) {
     lines.push("active frame   (nothing loaded)");
   } else {
-    const pong = await pingActiveFrame();
-    if (!pong) {
+    const pong = await withTimeout(pingActiveFrame(), 1500, null);
+    if (!pong || pong.__err) {
       lines.push("active frame   NO RESPONSE");
       lines.push("  content script is not running in this frame, or its");
       lines.push("  extension-frame guard rejected it.");
