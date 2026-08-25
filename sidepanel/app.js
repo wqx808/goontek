@@ -1032,12 +1032,20 @@ async function diagnose() {
       lines.push(`  pointer:coarse ${pong.coarsePointer}`);
       lines.push(`  mq<=600px    ${pong.mqMobile600}`);
       lines.push(`  has cookies  ${pong.hasCookies}`);
-      lines.push(`  can set cookie ${pong.cookieWritable}`);
+      lines.push(`  cookies stored ${pong.cookieCount ?? "?"}`);
+      lines.push(`  normal cookie (SameSite=Lax) ${pong.cookieLax}`);
+      lines.push(`  cross-site cookie (SameSite=None) ${pong.cookieNone}`);
       lines.push(`  can use storage ${pong.storageWritable}`);
-      if (pong.cookieWritable === false) {
-        lines.push("  ^ third-party cookies are blocked here, so this site");
-        lines.push("    cannot remember anything: age gates and consent");
-        lines.push("    banners will reappear on every navigation.");
+      if (pong.cookieLax === false) {
+        lines.push("  ^ THIS is why an age gate or consent banner keeps");
+        lines.push("    returning. The panel embeds sites cross-site, and the");
+        lines.push("    browser is refusing ordinary cookies here, so the site");
+        lines.push("    cannot record that you accepted. Allow third-party");
+        lines.push("    cookies for this site, or open it in a browser tab.");
+      }
+      if (pong.cookieNames?.length) {
+        lines.push("  cookie names");
+        for (const n of pong.cookieNames) lines.push(`    ${n}`);
       }
       const over = pong.scrollWidth - pong.innerWidth;
       lines.push(`  overflow     ${over > 8 ? `${over}px WIDER than viewport` : "none"}`);

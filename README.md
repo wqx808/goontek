@@ -82,6 +82,27 @@ unambiguously a phone, so the mobile layout wins — the same reason the site lo
 right on an actual iPhone. Zooming up to fill the panel is done with CSS `zoom`,
 so text stays sharp rather than blurring.
 
+### Age gates and cookie banners that keep coming back
+
+If a site asks you to confirm your age, or accept cookies, every single time,
+it is because the panel embeds sites **cross-site**. A site records that kind of
+choice in an ordinary cookie (`SameSite=Lax` by default), and browsers refuse
+those in a third-party frame — so the site never manages to write down that you
+answered.
+
+Manifest V3 gives an extension no way around this: it cannot rewrite
+`Set-Cookie` to mark those cookies as cross-site usable. Two things do work:
+
+- Allow third-party cookies for that one site. In Chrome, Settings → Privacy
+  and security → Third-party cookies → *Sites allowed to use third-party
+  cookies* → Add `[*.]example.com`. In Brave, open Shields on the site and
+  set Cookies to allow.
+- Or open the site in a browser tab (Settings → Troubleshooting), where it is
+  first-party and behaves normally.
+
+**Diagnostics** reports this directly: if *normal cookie (SameSite=Lax)* is
+`false`, that is the cause.
+
 ### When a site stays desktop anyway
 
 A few sites (Pornhub is one) decide desktop-vs-mobile from a preference they

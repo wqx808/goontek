@@ -571,21 +571,35 @@
       // and its extension-frame guard passed.
       const doc = document.documentElement;
       const viewport = document.querySelector('meta[name="viewport"]');
-      // Can this frame persist a cookie at all? The panel embeds the site
-      // cross-site, which is a third-party context, and Chrome blocks
-      // third-party cookies. If this fails, the site cannot remember anything
-      // cookie-based — age gates and consent banners will return on every
-      // navigation no matter what the panel does.
-      let cookieWritable = false;
+      // Can this frame persist the kind of cookie a site actually sets?
+      //
+      // The panel embeds sites cross-site, which is a third-party context. A
+      // cookie marked SameSite=None; Secure survives that; a default cookie
+      // (SameSite=Lax), which is what an age gate or consent banner writes,
+      // does not. Testing only the None flavour reports success and hides the
+      // real problem, so both are measured separately.
+      let cookieLax = false;
+      let cookieNone = false;
       try {
-        const probe = "__goontek_probe";
-        document.cookie = `${probe}=1; path=/; SameSite=None; Secure`;
-        cookieWritable = document.cookie.includes(probe);
-        if (!cookieWritable) {
-          document.cookie = `${probe}=1; path=/`; // retry without SameSite=None
-          cookieWritable = document.cookie.includes(probe);
-        }
-        document.cookie = `${probe}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+        const kill = (n) => {
+          document.cookie = n + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+        };
+        document.cookie = "__goontek_lax=1; path=/";
+        cookieLax = document.cookie.includes("__goontek_lax");
+        kill("__goontek_lax");
+        document.cookie = "__goontek_none=1; path=/; SameSite=None; Secure";
+        cookieNone = document.cookie.includes("__goontek_none");
+        kill("__goontek_none");
+      } catch {}
+
+      // Names only — values may be session tokens and do not belong in a report
+      // the user is about to paste somewhere.
+      let cookieNames = [];
+      try {
+        cookieNames = document.cookie
+          .split(";")
+          .map((c) => c.split("=")[0].trim())
+          .filter(Boolean);
       } catch {}
 
       let storageWritable = false;
@@ -638,7 +652,10 @@
           coarsePointer: matchMedia("(pointer: coarse)").matches,
           mqMobile600: matchMedia("(max-width: 600px)").matches,
           hasCookies: document.cookie.length > 0,
-          cookieWritable,
+          cookieLax,
+          cookieNone,
+          cookieCount: cookieNames.length,
+          cookieNames: cookieNames.slice(0, 40),
           storageWritable,
         },
         "*"
