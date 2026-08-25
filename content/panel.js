@@ -62,6 +62,12 @@
       // and its extension-frame guard passed.
       const doc = document.documentElement;
       const viewport = document.querySelector('meta[name="viewport"]');
+      let uaData = null;
+      try {
+        uaData = navigator.userAgentData
+          ? { mobile: navigator.userAgentData.mobile, platform: navigator.userAgentData.platform }
+          : "absent";
+      } catch {}
       parent.postMessage(
         {
           source: "goontek",
@@ -74,6 +80,18 @@
           mobilePatched: doc.hasAttribute("data-goontek-ua"),
           viewport: viewport ? viewport.content : null,
           readyState: document.readyState,
+          // The decisive fields: what the site actually sees. If the UA is an
+          // iPhone and innerWidth is ~390 but the layout is still desktop, the
+          // site is not deciding layout from either — it is server-side or a
+          // stored preference, and no client-side spoof can change it.
+          seenUA: navigator.userAgent,
+          seenUAData: uaData,
+          seenPlatform: navigator.platform,
+          seenTouchPoints: navigator.maxTouchPoints,
+          dpr: window.devicePixelRatio,
+          coarsePointer: matchMedia("(pointer: coarse)").matches,
+          mqMobile600: matchMedia("(max-width: 600px)").matches,
+          hasCookies: document.cookie.length > 0,
         },
         "*"
       );

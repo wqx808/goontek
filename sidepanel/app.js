@@ -846,15 +846,47 @@ async function diagnose() {
       lines.push("  content script is not running in this frame, or its");
       lines.push("  extension-frame guard rejected it.");
     } else {
+      const frame = frames.get(tab.id);
       lines.push(`active frame   ${pong.url}`);
       lines.push(`  ready        ${pong.readyState}`);
-      lines.push(`  main-world patch ${pong.mobilePatched ? "applied" : "DID NOT RUN"}`);
-      lines.push(`  viewport     ${pong.viewport || "(none)"}`);
+      lines.push("");
+      lines.push("  -- what the panel applied --");
+      lines.push(`  width setting  ${config.width}`);
+      lines.push(`  frame css w    ${frame?.style.width || "(none)"}`);
+      lines.push(`  frame zoom     ${frame?.style.zoom || "(none)"}`);
+      lines.push(`  fit recorded   ${fits.has(tab.id) ? `${fits.get(tab.id)}px` : "no"}`);
+      lines.push("");
+      lines.push("  -- what the site sees --");
+      lines.push(`  UA           ${pong.seenUA || "?"}`);
+      lines.push(`  userAgentData ${JSON.stringify(pong.seenUAData)}`);
+      lines.push(`  platform     ${pong.seenPlatform}`);
+      lines.push(`  touchPoints  ${pong.seenTouchPoints}`);
+      lines.push(`  dpr          ${pong.dpr}`);
+      lines.push(`  main patch   ${pong.mobilePatched ? "applied" : "DID NOT RUN"}`);
       lines.push(`  innerWidth   ${pong.innerWidth}`);
       lines.push(`  scrollWidth  ${pong.scrollWidth}`);
+      lines.push(`  viewport meta ${pong.viewport || "(none)"}`);
+      lines.push(`  pointer:coarse ${pong.coarsePointer}`);
+      lines.push(`  mq<=600px    ${pong.mqMobile600}`);
+      lines.push(`  has cookies  ${pong.hasCookies}`);
       const over = pong.scrollWidth - pong.innerWidth;
-      lines.push(`  overflow     ${over > 8 ? `${over}px WIDER than the panel` : "none"}`);
-      lines.push(`  fit applied  ${fits.has(tab.id) ? `yes (${fits.get(tab.id)}px)` : "no"}`);
+      lines.push(`  overflow     ${over > 8 ? `${over}px WIDER than viewport` : "none"}`);
+      lines.push("");
+      lines.push("  -- verdict --");
+      const iphone = /iPhone/.test(pong.seenUA || "");
+      if (iphone && pong.innerWidth <= 430 && over > 8) {
+        lines.push("  Site sees an iPhone UA and a ~phone viewport but still");
+        lines.push("  overflows: it is choosing desktop layout from something");
+        lines.push("  other than UA or width (server-side or a stored cookie).");
+      } else if (!iphone) {
+        lines.push("  Site does NOT see the iPhone UA. The header rule or the");
+        lines.push("  main-world patch is not reaching this frame.");
+      } else if (pong.innerWidth > 430) {
+        lines.push("  Viewport is wider than a phone. Width setting is not being");
+        lines.push("  applied to this frame.");
+      } else {
+        lines.push("  Phone UA + phone viewport + no overflow: looks correct.");
+      }
     }
   }
 
@@ -896,6 +928,15 @@ function pingActiveFrame() {
 
 $("diagclose").addEventListener("click", () => {
   $("diag").hidden = true;
+});
+
+$("diagcopy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("diagbody").textContent);
+    toast("Diagnostics copied");
+  } catch {
+    toast("Could not copy");
+  }
 });
 
 // ------------------------------------------------------------ keyboard
