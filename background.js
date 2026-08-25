@@ -15,9 +15,13 @@ const RULE_ADBLOCK = 3;
 const SCRIPT_MOBILE = "goontek-mobile";
 const SCRIPT_PANEL = "goontek-panel";
 
+// iOS Safari rather than Android Chrome. Sites that serve a good mobile layout
+// are overwhelmingly tested against iPhone Safari, and it is a more consistent
+// disguise: Safari sends no Sec-CH-UA hints and exposes no navigator.userAgentData,
+// so there is no Chrome-shaped evidence left behind to contradict the UA.
 const MOBILE_UA =
-  "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) " +
-  "Chrome/131.0.0.0 Mobile Safari/537.36";
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 " +
+  "(KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
 
 // Set-up failures are recorded rather than swallowed; without this a failed
 // registration looks identical to an extension that simply does nothing.
@@ -131,12 +135,19 @@ async function syncRules() {
       type: "modifyHeaders",
       requestHeaders: [
         { header: "user-agent", operation: "set", value: MOBILE_UA },
-        { header: "sec-ch-ua-mobile", operation: "set", value: "?1" },
-        { header: "sec-ch-ua-platform", operation: "set", value: '"Android"' },
+        // Safari sends no client hints. Removing them is part of the disguise:
+        // a Chrome hint next to an iPhone UA is a contradiction that
+        // server-side device detection notices.
+        { header: "sec-ch-ua", operation: "remove" },
+        { header: "sec-ch-ua-mobile", operation: "remove" },
+        { header: "sec-ch-ua-platform", operation: "remove" },
       ],
     },
+    // sub_frame only. An xmlhttprequest condition cannot match here: requests a
+    // framed page makes are attributed to that page's origin, not to the
+    // extension, so initiatorDomains never matches them.
     condition: {
-      resourceTypes: ["sub_frame", "xmlhttprequest"],
+      resourceTypes: ["sub_frame"],
       initiatorDomains: [self],
     },
   });

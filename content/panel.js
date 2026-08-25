@@ -32,6 +32,24 @@
     for (const el of document.querySelectorAll("video, audio")) applyTo(el);
   }
 
+  // Tell the panel which document is showing. The panel cannot read the URL of
+  // a cross-origin frame, so without this it never learns about navigations
+  // that happen inside the frame, and cannot offer back or forward.
+  const announce = () => {
+    parent.postMessage({ source: "goontek", type: "located", url: location.href }, "*");
+  };
+  announce();
+  document.addEventListener("DOMContentLoaded", announce, { once: true });
+
+  // A CSS transform on an ancestor breaks fullscreen rendering, and the panel
+  // scales the frame to fit. Tell it to drop the transform while fullscreen.
+  document.addEventListener("fullscreenchange", () => {
+    parent.postMessage(
+      { source: "goontek", type: "fullscreen", on: Boolean(document.fullscreenElement) },
+      "*"
+    );
+  });
+
   window.addEventListener("message", (event) => {
     const msg = event.data;
     if (!msg || msg.source !== "goontek") return;

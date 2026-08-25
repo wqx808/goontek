@@ -15,12 +15,22 @@ const toastEl = $("toast");
 
 const CONFIG_KEY = "goontek:config";
 const SESSION_KEY = "goontek:session";
-const MAX_TABS = 8;
 
 // Favourites are the only state that outlives a session: storage.local, on
 // disk, untouched by hide. Mobile emulation and ad blocking have no settings;
 // the service worker owns both.
-let config = { volume: 1, muted: false, favourites: [], width: "auto" };
+let config = {
+  volume: 1,
+  muted: false,
+  favourites: [],
+  width: "auto",
+  theme: "system",
+  accent: "",
+  search: "duckduckgo",
+  maxTabs: 8,
+  scrubOnHide: true,
+  ui: {}, // checkbox id -> false when that control is hidden
+};
 let minimized = false;
 let tabs = []; // [{ id, url }]
 let activeId = null;
@@ -46,6 +56,7 @@ async function init() {
   if (tabs.length === 0) newTab({ focus: false });
 
   $("width").value = String(config.width);
+  applyAppearance();
   renderVolume();
   renderFavourites();
   renderTabs();
@@ -56,8 +67,8 @@ async function init() {
 // ---------------------------------------------------------------- tabs
 
 function newTab({ url = "", focus = true } = {}) {
-  if (tabs.length >= MAX_TABS) {
-    toast(`Tab limit is ${MAX_TABS}`);
+  if (tabs.length >= config.maxTabs) {
+    toast(`Tab limit is ${config.maxTabs}`);
     return null;
   }
   const tab = { id: nextId++, url };
@@ -146,6 +157,13 @@ function frameFor(tab) {
       "sandbox",
       "allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
     );
+    // Without this a video player's fullscreen button does nothing: the
+    // Permissions Policy for fullscreen is not delegated to a frame by default.
+    frame.setAttribute(
+      "allow",
+      "fullscreen; autoplay; encrypted-media; picture-in-picture; clipboard-write"
+    );
+    frame.allowFullscreen = true;
     const id = tab.id;
     frame.addEventListener("load", () => {
       // Media state resets on every navigation.
@@ -172,6 +190,7 @@ function destroyFrame(id) {
     frames.delete(id);
   }
   fits.delete(id);
+  navHistory.delete(id);
 }
 
 // ------------------------------------------------------------ fit width
@@ -186,16 +205,30 @@ const fits = new Map(); // tab id -> required CSS width
 
 window.addEventListener("message", (event) => {
   const msg = event.data;
-  if (!msg || msg.source !== "goontek" || msg.type !== "fit") return;
+  if (!msg || msg.source !== "goontek") return;
 
-  for (const [id, frame] of frames) {
-    if (frame.contentWindow !== event.source) continue;
+  let id = null;
+  for (const [tabId, frame] of frames) {
+    if (frame.contentWindow === event.source) {
+      id = tabId;
+      break;
+    }
+  }
+  if (id === null) return;
+
+  if (msg.type === "fit") {
     if (fits.has(id)) return; // already fitted for this navigation
     const required = Number(msg.required);
     if (!Number.isFinite(required) || required < 200) return;
     fits.set(id, required);
     applyFit(id);
-    return;
+  } else if (msg.type === "located") {
+    recordVisit(id, msg.url);
+  } else if (msg.type === "fullscreen") {
+    const frame = frames.get(id);
+    if (!frame) return;
+    if (msg.on) clearFit(frame);
+    else applyFit(id);
   }
 });
 
@@ -242,6 +275,71 @@ function clearFit(frame) {
   frame.style.transform = "";
 }
 
+// -------------------------------------------------------- back / forward
+
+// Per-tab history, built from what the framed documents report. The panel
+// cannot read a cross-origin frame's own history, so this is the only way to
+// offer back and forward across navigations the user makes inside the page.
+const navHistory = new Map(); // tab id -> { stack: string[], index: number, expect: string|null }
+
+function historyFor(id) {
+  let h = navHistory.get(id);
+  if (!h) {
+    h = { stack: [], index: -1, expect: null };
+    navHistory.set(id, h);
+  }
+  return h;
+}
+
+function recordVisit(id, url) {
+  if (typeof url !== "string" || url === "about:blank") return;
+  const h = historyFor(id);
+
+  // A visit we caused by going back or forward is already in the stack.
+  if (h.expect === url) {
+    h.expect = null;
+    renderNav();
+    return;
+  }
+  if (h.stack[h.index] === url) return;
+
+  h.stack.splice(h.index + 1); // moving somewhere new drops the forward entries
+  h.stack.push(url);
+  h.index = h.stack.length - 1;
+  renderNav();
+}
+
+function go(delta) {
+  const tab = activeTab();
+  if (!tab) return;
+  const h = historyFor(tab.id);
+  const next = h.index + delta;
+  if (next < 0 || next >= h.stack.length) return;
+
+  h.index = next;
+  h.expect = h.stack[next];
+  tab.url = h.stack[next];
+
+  const frame = frameFor(tab);
+  fits.delete(tab.id);
+  clearFit(frame);
+  frame.src = h.stack[next];
+
+  saveSession();
+  renderTabs();
+  showActive();
+}
+
+function renderNav() {
+  const tab = activeTab();
+  const h = tab ? historyFor(tab.id) : { stack: [], index: -1 };
+  $("back").disabled = h.index <= 0;
+  $("forward").disabled = h.index < 0 || h.index >= h.stack.length - 1;
+}
+
+$("back").addEventListener("click", () => go(-1));
+$("forward").addEventListener("click", () => go(1));
+
 // The panel is user-resizable, so a scaled frame has to be rescaled with it.
 new ResizeObserver(applyFitAll).observe(stage);
 
@@ -255,6 +353,7 @@ function showActive() {
   empty.classList.toggle("hidden", !blank);
   urlInput.value = tab?.url || "";
   renderFavStar();
+  renderNav();
 }
 
 // --------------------------------------------------------- favourites
@@ -342,9 +441,16 @@ omni.addEventListener("submit", (e) => {
 function normalize(raw) {
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) return raw;
-  // Bare domain (a dot, no whitespace) → assume https.
-  if (/^[^\s]+\.[^\s]+$/.test(raw)) return "https://" + raw;
-  return "https://duckduckgo.com/?q=" + encodeURIComponent(raw);
+  // A hostname: dot-separated labels ending in an alphabetic TLD, with an
+  // optional port and path. Requiring a real TLD keeps "1.5" and "notes.txt"
+  // out, which a bare "contains a dot" test promoted to bogus URLs.
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(:\d+)?(\/[^\s]*)?$/i.test(raw)) {
+    return "https://" + raw;
+  }
+  // localhost has no dot, and does not serve https by default.
+  if (/^localhost(:\d+)?(\/[^\s]*)?$/i.test(raw)) return "http://" + raw;
+  const engine = SEARCH_ENGINES[config.search] || SEARCH_ENGINES.duckduckgo;
+  return engine + encodeURIComponent(raw);
 }
 
 function navigate(url) {
@@ -490,7 +596,7 @@ async function minimize() {
   $("curtain").hidden = false;
   $("reopen").focus();
 
-  if (visited.length) {
+  if (config.scrubOnHide !== false && visited.length) {
     await chrome.runtime
       .sendMessage({ type: "goontek:clear-history", urls: visited })
       .catch(() => {});
@@ -506,6 +612,140 @@ function restore() {
   pushVolumeAll();
   urlInput.focus();
 }
+
+// ------------------------------------------------------------ settings
+
+// Paste a Solana address here to enable the donate panel. Left empty on
+// purpose: an address that is wrong or invented sends real money nowhere.
+const SOLANA_WALLET = "";
+const BUG_URL = "https://github.com/wqx808/goontek/issues/new";
+
+const SEARCH_ENGINES = {
+  duckduckgo: "https://duckduckgo.com/?q=",
+  google: "https://www.google.com/search?q=",
+  brave: "https://search.brave.com/search?q=",
+  startpage: "https://www.startpage.com/sp/search?query=",
+};
+
+const ACCENTS = [
+  ["neutral", ""],
+  ["orange", "#f97316"],
+  ["blue", "#3b82f6"],
+  ["green", "#3f9d5c"],
+  ["violet", "#8b5cf6"],
+  ["red", "#dc4a3d"],
+];
+
+const UI_KEYS = {
+  uiFavourites: "favs",
+  uiVolume: "volwrap",
+  uiWidth: "width",
+  uiClear: "clear",
+  uiHide: "panic",
+};
+
+function applyAppearance() {
+  const root = document.documentElement;
+  if (config.theme === "system") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", config.theme);
+
+  if (config.accent) root.style.setProperty("--accent", config.accent);
+  else root.style.removeProperty("--accent");
+
+  for (const [checkboxId, elementId] of Object.entries(UI_KEYS)) {
+    const el = $(elementId);
+    if (el) el.classList.toggle("ui-off", config.ui?.[checkboxId] === false);
+  }
+}
+
+function renderSettings() {
+  $("setTheme").value = config.theme;
+  $("setMaxTabs").value = String(config.maxTabs);
+  $("setSearch").value = config.search;
+  $("setScrubOnHide").checked = config.scrubOnHide !== false;
+
+  for (const id of Object.keys(UI_KEYS)) {
+    $(id).checked = config.ui?.[id] !== false;
+  }
+
+  const wrap = $("swatches");
+  wrap.textContent = "";
+  for (const [name, value] of ACCENTS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "swatch";
+    b.title = name;
+    b.setAttribute("aria-label", name);
+    b.setAttribute("aria-pressed", String((config.accent || "") === value));
+    if (value) b.style.background = value;
+    else b.classList.add("swatch-neutral");
+    b.addEventListener("click", () => {
+      config.accent = value;
+      saveConfig();
+      applyAppearance();
+      renderSettings();
+    });
+    wrap.appendChild(b);
+  }
+}
+
+$("settings").addEventListener("click", () => {
+  renderSettings();
+  $("settingsPanel").hidden = false;
+});
+$("settingsClose").addEventListener("click", () => {
+  $("settingsPanel").hidden = true;
+});
+
+$("setTheme").addEventListener("change", (e) => {
+  config.theme = e.target.value;
+  saveConfig();
+  applyAppearance();
+});
+
+$("setMaxTabs").addEventListener("change", (e) => {
+  config.maxTabs = Number(e.target.value);
+  saveConfig();
+});
+
+$("setSearch").addEventListener("change", (e) => {
+  config.search = e.target.value;
+  saveConfig();
+});
+
+$("setScrubOnHide").addEventListener("change", (e) => {
+  config.scrubOnHide = e.target.checked;
+  saveConfig();
+});
+
+for (const id of Object.keys(UI_KEYS)) {
+  $(id).addEventListener("change", (e) => {
+    config.ui = { ...config.ui, [id]: e.target.checked };
+    saveConfig();
+    applyAppearance();
+  });
+}
+
+$("reportBug").addEventListener("click", () => newTab({ url: BUG_URL }));
+
+$("donate").addEventListener("click", () => {
+  if (!SOLANA_WALLET) {
+    toast("No wallet configured yet");
+    return;
+  }
+  const box = $("donateBox");
+  box.hidden = !box.hidden;
+  $("wallet").textContent = SOLANA_WALLET;
+});
+
+$("copyWallet").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(SOLANA_WALLET);
+    toast("Address copied");
+  } catch {
+    toast("Could not copy");
+  }
+});
 
 // -------------------------------------------------------- diagnostics
 
@@ -591,6 +831,25 @@ $("diagclose").addEventListener("click", () => {
 // ------------------------------------------------------------ keyboard
 
 document.addEventListener("keydown", (e) => {
+  if (e.altKey && !e.ctrlKey && !e.metaKey) {
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      go(-1);
+      return;
+    }
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      go(1);
+      return;
+    }
+  }
+
+  if (e.key === "Escape") {
+    $("settingsPanel").hidden = true;
+    $("diag").hidden = true;
+    return;
+  }
+
   const mod = e.ctrlKey || e.metaKey;
   if (!mod) return;
 

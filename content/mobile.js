@@ -21,9 +21,10 @@
   }
   if (!rooted) return;
 
+  // Must match the User-Agent the network rule sets, or the two contradict.
   const UA =
-    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) " +
-    "Chrome/131.0.0.0 Mobile Safari/537.36";
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 " +
+    "(KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
 
   const define = (obj, prop, value) => {
     try {
@@ -35,35 +36,13 @@
 
   define(navigator, "userAgent", UA);
   define(navigator, "appVersion", UA.slice("Mozilla/".length));
-  define(navigator, "platform", "Linux armv81");
-  define(navigator, "vendor", "Google Inc.");
+  define(navigator, "platform", "iPhone");
+  define(navigator, "vendor", "Apple Computer, Inc.");
   define(navigator, "maxTouchPoints", 5);
 
-  // Client hints: the modern half of UA sniffing.
-  if (navigator.userAgentData) {
-    const brands = [
-      { brand: "Chromium", version: "131" },
-      { brand: "Google Chrome", version: "131" },
-      { brand: "Not?A_Brand", version: "24" },
-    ];
-    define(navigator, "userAgentData", {
-      brands,
-      mobile: true,
-      platform: "Android",
-      getHighEntropyValues: async () => ({
-        architecture: "",
-        bitness: "",
-        brands,
-        fullVersionList: brands,
-        mobile: true,
-        model: "Pixel 8",
-        platform: "Android",
-        platformVersion: "14.0.0",
-        uaFullVersion: "131.0.0.0",
-      }),
-      toJSON: () => ({ brands, mobile: true, platform: "Android" }),
-    });
-  }
+  // Safari exposes no userAgentData at all. Leaving Chrome's in place next to an
+  // iPhone User-Agent is the single clearest tell, so hide it.
+  define(navigator, "userAgentData", undefined);
 
   // Touch capability: many sites branch on these existing at all.
   if (!("ontouchstart" in window)) {
