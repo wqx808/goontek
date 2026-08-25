@@ -184,6 +184,10 @@
     "visibility: visible !important",
     "display: block !important",
     "overflow: visible !important",
+    // Players hide the pointer during fullscreen playback; in a panel that just
+    // leaves the user with no visible cursor.
+    "cursor: auto !important",
+    "pointer-events: auto !important",
     // These are what create a containing block / stacking context and trap the
     // element. Clearing them is the whole trick.
     "transform: none !important",
@@ -240,6 +244,7 @@
 
     document.addEventListener("keydown", onTheaterKey, true);
     syncVideoControls();
+    notifyLayoutChanged(video, true);
   }
 
   function exitTheater() {
@@ -259,6 +264,7 @@
 
     document.removeEventListener("keydown", onTheaterKey, true);
     syncVideoControls();
+    notifyLayoutChanged(video, false);
   }
 
   // The page's fullscreen button routes here: mobile.js intercepts the
@@ -267,6 +273,27 @@
   document.addEventListener("goontek:theater-enter", enterTheater);
   document.addEventListener("goontek:theater-exit", exitTheater);
 
+
+  /**
+   * Tell the player its world changed. Players size themselves from the
+   * viewport and cache the result, so without a resize they keep the
+   * theater-sized geometry after exiting and the page comes back broken.
+   * Sent twice because many players debounce.
+   */
+  function notifyLayoutChanged(video, entering) {
+    const fire = () => {
+      window.dispatchEvent(new Event("resize"));
+      try {
+        // iOS players track fullscreen through these rather than the standard
+        // fullscreenchange event.
+        video.dispatchEvent(
+          new Event(entering ? "webkitbeginfullscreen" : "webkitendfullscreen")
+        );
+      } catch {}
+    };
+    fire();
+    setTimeout(fire, 250);
+  }
 
   function onTheaterKey(e) {
     if (e.key === "Escape") {

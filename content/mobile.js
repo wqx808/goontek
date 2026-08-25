@@ -77,7 +77,10 @@
     for (const name of ["requestFullscreen", "webkitRequestFullscreen", "webkitRequestFullScreen", "mozRequestFullScreen", "msRequestFullscreen"]) {
       Object.defineProperty(Element.prototype, name, {
         value: function () {
-          return askTheater("enter");
+          // Toggle: players that track fullscreen state internally call enter
+          // again on their own button rather than exit, so a second enter has
+          // to close theater or the button appears dead.
+          return askTheater(inTheater() ? "exit" : "enter");
         },
         writable: true,
         configurable: true,
@@ -115,7 +118,7 @@
     });
     Object.defineProperty(VP, "webkitEnterFullscreen", {
       value: function () {
-        askTheater("enter");
+        askTheater(inTheater() ? "exit" : "enter");
       },
       writable: true,
       configurable: true,
