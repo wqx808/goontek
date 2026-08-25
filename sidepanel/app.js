@@ -879,6 +879,15 @@ $("reqMobile").addEventListener("click", () => {
   requestMobileSite();
 });
 
+$("openTab").addEventListener("click", () => {
+  const tab = activeTab();
+  if (!tab?.url) {
+    toast("Nothing loaded");
+    return;
+  }
+  chrome.tabs.create({ url: tab.url });
+});
+
 $("showDiag").addEventListener("click", () => {
   $("settingsPanel").hidden = true;
   diagnose();

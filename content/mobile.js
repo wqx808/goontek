@@ -55,6 +55,50 @@
   define(screen, "pixelDepth", 24);
   define(window, "devicePixelRatio", 3);
 
+  // iOS video fullscreen shim.
+  //
+  // Claiming to be an iPhone has a side effect: mobile players target iOS
+  // Safari, whose <video> exposes webkitEnterFullscreen(). Desktop Chrome has
+  // no such method, so a player that takes the iOS path calls undefined and its
+  // fullscreen button silently does nothing. Provide the method, backed by
+  // Picture-in-Picture, which actually escapes the side panel — a side panel
+  // cannot give a video the whole monitor anyway.
+  try {
+    const VP = HTMLVideoElement.prototype;
+    if (typeof VP.webkitEnterFullscreen !== "function") {
+      Object.defineProperty(VP, "webkitSupportsFullscreen", {
+        get: () => true,
+        configurable: true,
+      });
+      Object.defineProperty(VP, "webkitDisplayingFullscreen", {
+        get() {
+          return document.pictureInPictureElement === this || document.fullscreenElement === this;
+        },
+        configurable: true,
+      });
+      Object.defineProperty(VP, "webkitEnterFullscreen", {
+        value: function () {
+          const toFullscreen = () => this.requestFullscreen && this.requestFullscreen().catch(() => {});
+          if (document.pictureInPictureEnabled && !this.disablePictureInPicture) {
+            this.requestPictureInPicture().catch(toFullscreen);
+          } else {
+            toFullscreen();
+          }
+        },
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(VP, "webkitExitFullscreen", {
+        value: function () {
+          if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
+          else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+        },
+        writable: true,
+        configurable: true,
+      });
+    }
+  } catch {}
+
   // Touch capability: many sites branch on these existing at all.
   if (!("ontouchstart" in window)) {
     try {
