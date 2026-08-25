@@ -100,6 +100,12 @@
   // "language" or "review_count".
   const PREF = /desktop|mobile|platform|device_?type|fullsite|full_site|no_?mobile|use_?desktop|preferred?_?view|view_?mode|layout_?pref|skin|responsive/i;
 
+  // Never clear these, even if the name also looks like a preference. Removing
+  // an age or consent record makes the site show its gate again on every load,
+  // and removing a session logs the user out — both far worse than a stale
+  // layout preference.
+  const KEEP = /age|consent|gdpr|cookie|gate|legal|access|adult|confirm|notice|token|session|auth|login|csrf|remember/i;
+
   // Expire this document's own JS-readable cookies whose name looks like a
   // desktop/mobile preference, and drop matching storage keys. Runs in the
   // frame's origin, so no extension cookie permission is needed — but it cannot
@@ -112,7 +118,7 @@
     try {
       for (const pair of document.cookie.split(";")) {
         const name = pair.split("=")[0].trim();
-        if (name && PREF.test(name)) {
+        if (name && PREF.test(name) && !KEEP.test(name)) {
           document.cookie = name + expiry;
           document.cookie = name + expiry + "; domain=." + registrable;
           cleared.cookies.push(name);
@@ -124,7 +130,7 @@
         const keys = [];
         for (let i = 0; i < store.length; i += 1) keys.push(store.key(i));
         for (const k of keys) {
-          if (k && PREF.test(k)) {
+          if (k && PREF.test(k) && !KEEP.test(k)) {
             store.removeItem(k);
             cleared.storage.push(k);
           }
@@ -151,6 +157,30 @@
       // and its extension-frame guard passed.
       const doc = document.documentElement;
       const viewport = document.querySelector('meta[name="viewport"]');
+      // Can this frame persist a cookie at all? The panel embeds the site
+      // cross-site, which is a third-party context, and Chrome blocks
+      // third-party cookies. If this fails, the site cannot remember anything
+      // cookie-based — age gates and consent banners will return on every
+      // navigation no matter what the panel does.
+      let cookieWritable = false;
+      try {
+        const probe = "__goontek_probe";
+        document.cookie = `${probe}=1; path=/; SameSite=None; Secure`;
+        cookieWritable = document.cookie.includes(probe);
+        if (!cookieWritable) {
+          document.cookie = `${probe}=1; path=/`; // retry without SameSite=None
+          cookieWritable = document.cookie.includes(probe);
+        }
+        document.cookie = `${probe}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+      } catch {}
+
+      let storageWritable = false;
+      try {
+        localStorage.setItem("__goontek_probe", "1");
+        storageWritable = localStorage.getItem("__goontek_probe") === "1";
+        localStorage.removeItem("__goontek_probe");
+      } catch {}
+
       let uaData = null;
       try {
         uaData = navigator.userAgentData
@@ -182,6 +212,8 @@
           coarsePointer: matchMedia("(pointer: coarse)").matches,
           mqMobile600: matchMedia("(max-width: 600px)").matches,
           hasCookies: document.cookie.length > 0,
+          cookieWritable,
+          storageWritable,
         },
         "*"
       );

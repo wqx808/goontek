@@ -989,6 +989,13 @@ async function diagnose() {
       lines.push(`  pointer:coarse ${pong.coarsePointer}`);
       lines.push(`  mq<=600px    ${pong.mqMobile600}`);
       lines.push(`  has cookies  ${pong.hasCookies}`);
+      lines.push(`  can set cookie ${pong.cookieWritable}`);
+      lines.push(`  can use storage ${pong.storageWritable}`);
+      if (pong.cookieWritable === false) {
+        lines.push("  ^ third-party cookies are blocked here, so this site");
+        lines.push("    cannot remember anything: age gates and consent");
+        lines.push("    banners will reappear on every navigation.");
+      }
       const over = pong.scrollWidth - pong.innerWidth;
       lines.push(`  overflow     ${over > 8 ? `${over}px WIDER than viewport` : "none"}`);
       lines.push("");
