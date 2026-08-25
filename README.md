@@ -24,6 +24,7 @@ Not on the Web Store yet. Needs Chrome 116+.
 | Switch tab | `Ctrl+1` … `Ctrl+8` |
 | Address bar / reload | `Ctrl+L` / `Ctrl+R` |
 | Favourite | `Ctrl+D` |
+| Layout width | dropdown in the panel |
 | Diagnostics | `Ctrl+Shift+D` |
 
 Hide covers the panel, mutes and pauses every frame, and deletes the session's
@@ -50,6 +51,17 @@ page are attributed to that page rather than to the extension, so Chrome gives
 no way to scope the rules to the side panel. Everything in
 `rules/blocklist.json` is blocked everywhere for as long as Goontek is
 installed, and uninstalling is the only way to turn it off.
+
+## Sites that need more room
+
+Some sites have a hard minimum width and will not reflow into a narrow panel.
+The width dropdown sets the width the page is laid out at, then scales it to fit
+whatever the panel is. `auto` measures the page and only steps in when it
+overflows; pick an explicit width when a site still looks cramped or clipped.
+
+Scaling is a trade: at a 500px panel a 1280px layout renders at about 40%, which
+fits everything on screen but is small to read. Widening the panel itself is
+still the better option when you have the room.
 
 ## Something not rendering?
 

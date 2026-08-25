@@ -32,8 +32,16 @@
       <!-- Row 2b: favourites (hidden when empty) -->
       <div class="favs" id="favs" aria-label="Favourites"></div>
 
-      <!-- Row 3: volume and privacy -->
+      <!-- Row 3: layout width, volume, privacy -->
       <div class="actions">
+        <select id="width" class="ghost" aria-label="Layout width" title="Width the page is laid out at, scaled to fit the panel">
+          <option value="auto">auto</option>
+          <option value="900">900</option>
+          <option value="1100">1100</option>
+          <option value="1280">1280</option>
+          <option value="1600">1600</option>
+        </select>
+
         <div class="vol" id="volwrap">
           <button type="button" id="mute" class="vol-icon" title="Mute" aria-label="Mute" aria-pressed="false">
             <svg viewBox="0 0 16 16" aria-hidden="true">

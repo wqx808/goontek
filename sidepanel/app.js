@@ -20,7 +20,7 @@ const MAX_TABS = 8;
 // Favourites are the only state that outlives a session: storage.local, on
 // disk, untouched by hide. Mobile emulation and ad blocking have no settings;
 // the service worker owns both.
-let config = { volume: 1, muted: false, favourites: [] };
+let config = { volume: 1, muted: false, favourites: [], width: "auto" };
 let minimized = false;
 let tabs = []; // [{ id, url }]
 let activeId = null;
@@ -45,6 +45,7 @@ async function init() {
   }
   if (tabs.length === 0) newTab({ focus: false });
 
+  $("width").value = String(config.width);
   renderVolume();
   renderFavourites();
   renderTabs();
@@ -145,9 +146,18 @@ function frameFor(tab) {
       "sandbox",
       "allow-forms allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
     );
-    // A frame resets media state on every navigation, so re-send the volume
-    // once the new document has a chance to install its listener.
-    frame.addEventListener("load", () => pushVolume(frame));
+    const id = tab.id;
+    frame.addEventListener("load", () => {
+      // Media state resets on every navigation.
+      pushVolume(frame);
+      // So does layout. This fires for navigations *inside* the frame too,
+      // which the panel otherwise never hears about; without it the width
+      // measured for the first page sticks for every page after it.
+      if (config.width === "auto") {
+        fits.delete(id);
+        clearFit(frame);
+      }
+    });
     frames.set(tab.id, frame);
     stage.appendChild(frame);
   }
@@ -189,24 +199,42 @@ window.addEventListener("message", (event) => {
   }
 });
 
+/** The width to lay the page out at: an explicit choice, or what it measured. */
+function targetWidth(id) {
+  if (config.width !== "auto") return Number(config.width);
+  return fits.get(id) || 0;
+}
+
 function applyFit(id) {
   const frame = frames.get(id);
   if (!frame) return;
 
-  const required = fits.get(id);
+  const target = targetWidth(id);
   const width = stage.clientWidth;
   const height = stage.clientHeight;
 
-  if (!required || !width || required <= width + 8) {
+  // On auto, leave pages that already fit alone rather than scaling them.
+  if (!target || !width || (config.width === "auto" && target <= width + 8)) {
     clearFit(frame);
     return;
   }
 
-  const scale = width / required;
-  frame.style.width = `${required}px`;
+  const scale = width / target;
+  frame.style.width = `${target}px`;
   frame.style.height = `${Math.ceil(height / scale)}px`;
   frame.style.transform = `scale(${scale})`;
 }
+
+function applyFitAll() {
+  for (const id of frames.keys()) applyFit(id);
+}
+
+$("width").addEventListener("change", (e) => {
+  config.width = e.target.value === "auto" ? "auto" : Number(e.target.value);
+  saveConfig();
+  applyFitAll();
+  toast(config.width === "auto" ? "Width: auto" : `Width: ${config.width}px`);
+});
 
 function clearFit(frame) {
   frame.style.width = "";
@@ -214,10 +242,8 @@ function clearFit(frame) {
   frame.style.transform = "";
 }
 
-// The panel is user-resizable, so a fitted frame has to be rescaled with it.
-new ResizeObserver(() => {
-  for (const id of fits.keys()) applyFit(id);
-}).observe(stage);
+// The panel is user-resizable, so a scaled frame has to be rescaled with it.
+new ResizeObserver(applyFitAll).observe(stage);
 
 /** Show only the active tab's frame; show the empty state if it has no URL. */
 function showActive() {
