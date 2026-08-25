@@ -95,67 +95,173 @@
   });
   document.addEventListener("fullscreenerror", (e) => toPiP(e.target));
 
-  // Picture-in-Picture requires a user gesture in THIS document. A postMessage
-  // from the panel carries no activation across the frame boundary (verified:
-  // NotAllowedError), so a button in the panel can never start PiP. The only
-  // thing that works is a real click inside the frame, so provide one.
+  // Two ways to make a video big, since a side panel cannot go fullscreen:
   //
-  // It appears only when the frame actually has a usable video, and hides while
-  // PiP is already running.
-  let pipBtn = null;
-  function syncPipButton() {
-    let usable = null;
-    for (const v of document.querySelectorAll("video")) {
-      if (!v.disablePictureInPicture && (v.readyState > 0 || v.currentSrc || v.srcObject)) {
-        usable = v;
-        break;
-      }
-    }
-    const wanted =
-      usable && document.pictureInPictureEnabled && !document.pictureInPictureElement;
+  //  - Theater: black out the page and fill the panel with the video.
+  //  - Pop out: Picture-in-Picture, a floating window outside the panel.
+  //
+  // Both are driven from buttons injected here rather than from the panel,
+  // because PiP requires a user gesture in THIS document and a postMessage
+  // carries no activation across the frame boundary (verified NotAllowedError).
 
-    if (!wanted) {
-      if (pipBtn) pipBtn.style.display = "none";
+  // Layer order. The maximum is 2147483647, so the stack is built downward
+  // from it rather than giving several elements the same value and relying on
+  // DOM order, which the page controls.
+  const Z_CONTROLS = 2147483647;
+  const Z_VIDEO = 2147483646;
+  const Z_BACKDROP = 2147483645;
+
+  const BTN_STYLE = [
+    "all: initial",
+    "font: 600 12px/1 -apple-system, system-ui, sans-serif",
+    "padding: 8px 12px",
+    "border-radius: 999px",
+    "background: rgba(20,20,20,0.82)",
+    "color: #fff",
+    "cursor: pointer",
+    "box-shadow: 0 2px 10px rgba(0,0,0,0.35)",
+  ].join(";");
+
+  function makeButton(label, title, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.title = title;
+    b.setAttribute("aria-label", title);
+    b.style.cssText = BTN_STYLE;
+    b.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    });
+    return b;
+  }
+
+  /** A video worth offering controls for. */
+  function usableVideo() {
+    for (const v of document.querySelectorAll("video")) {
+      if (v.readyState > 0 || v.currentSrc || v.srcObject) return v;
+    }
+    return null;
+  }
+
+  // ------------------------------------------------------------- theater
+
+  let theater = null;
+
+  function enterTheater() {
+    if (theater) return;
+    const video = pickVideo(null);
+    if (!video) return;
+
+    const saved = {
+      cssText: video.style.cssText,
+      controls: video.controls,
+      overflow: document.documentElement.style.overflow,
+    };
+
+    const backdrop = document.createElement("div");
+    backdrop.style.cssText =
+      "all: initial; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;" +
+      "background: #000; z-index: " + Z_BACKDROP + ";";
+    (document.body || document.documentElement).appendChild(backdrop);
+
+    // Promote the element where it stands. Re-parenting or re-sourcing a video
+    // is what breaks MSE/blob playback (YouTube), so never do either — only
+    // its own styles change, and the media stays untouched.
+    video.style.cssText =
+      "position: fixed !important; top: 0 !important; left: 0 !important;" +
+      "width: 100vw !important; height: 100vh !important; max-width: none !important;" +
+      "max-height: none !important; margin: 0 !important; padding: 0 !important;" +
+      "object-fit: contain !important; background: #000 !important;" +
+      // Kill decoration the page's stylesheet may have put on the element.
+      "border: 0 !important; border-radius: 0 !important; outline: 0 !important;" +
+      "box-shadow: none !important; transform: none !important; inset: 0 !important;" +
+      "z-index: " + Z_VIDEO + " !important;";
+    // The site's own controls are behind the backdrop now, so make sure there
+    // is still a way to scrub and pause.
+    video.controls = true;
+    document.documentElement.style.overflow = "hidden";
+
+    const exit = makeButton("Exit", "Leave theater view", exitTheater);
+    exit.style.cssText += ";position: fixed; top: 10px; right: 10px; z-index: " + Z_CONTROLS + ";";
+    (document.body || document.documentElement).appendChild(exit);
+
+    theater = { video, backdrop, exit, saved };
+    document.addEventListener("keydown", onTheaterKey, true);
+    syncVideoControls();
+  }
+
+  function exitTheater() {
+    if (!theater) return;
+    const { video, backdrop, exit, saved } = theater;
+    video.style.cssText = saved.cssText;
+    video.controls = saved.controls;
+    document.documentElement.style.overflow = saved.overflow;
+    backdrop.remove();
+    exit.remove();
+    theater = null;
+    document.removeEventListener("keydown", onTheaterKey, true);
+    syncVideoControls();
+  }
+
+  function onTheaterKey(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      exitTheater();
+    }
+  }
+
+  // A navigation inside the frame throws away the element we promoted.
+  window.addEventListener("pagehide", () => {
+    if (theater) theater = null;
+  });
+
+  // ------------------------------------------------------- control cluster
+
+  let cluster = null;
+  let theaterBtn = null;
+  let pipBtn = null;
+
+  function syncVideoControls() {
+    const video = usableVideo();
+    const show = Boolean(video) && !theater;
+
+    if (!show) {
+      if (cluster) cluster.style.display = "none";
       return;
     }
-    if (!pipBtn) {
-      pipBtn = document.createElement("button");
-      pipBtn.type = "button";
-      pipBtn.textContent = "Pop out";
-      pipBtn.title = "Play in a floating window (Picture-in-Picture)";
-      pipBtn.setAttribute("aria-label", "Play in a floating window");
-      // all:initial so the host page's styles cannot distort it.
-      pipBtn.style.cssText = [
-        "all: initial",
-        "position: fixed",
-        "right: 10px",
-        "bottom: 10px",
-        "z-index: 2147483647",
-        "font: 600 12px/1 -apple-system, system-ui, sans-serif",
-        "padding: 8px 12px",
-        "border-radius: 999px",
-        "background: rgba(20,20,20,0.82)",
-        "color: #fff",
-        "cursor: pointer",
-        "box-shadow: 0 2px 10px rgba(0,0,0,0.35)",
-      ].join(";");
-      pipBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        // Synchronous: keeps the click's user activation, which PiP requires.
-        toPiP(null);
-      });
-      (document.body || document.documentElement).appendChild(pipBtn);
+
+    if (!cluster) {
+      cluster = document.createElement("div");
+      cluster.style.cssText =
+        "all: initial; position: fixed; right: 10px; bottom: 10px;" +
+        "z-index: " + Z_CONTROLS + "; display: flex; gap: 6px;";
+      theaterBtn = makeButton("Theater", "Fill the panel with the video", enterTheater);
+      pipBtn = makeButton("Pop out", "Play in a floating window (Picture-in-Picture)", () =>
+        toPiP(null)
+      );
+      cluster.append(theaterBtn, pipBtn);
+      (document.body || document.documentElement).appendChild(cluster);
     }
-    pipBtn.style.display = "block";
+
+    // PiP is not always available; theater always is.
+    const pipOk =
+      document.pictureInPictureEnabled &&
+      video &&
+      !video.disablePictureInPicture &&
+      !document.pictureInPictureElement;
+    pipBtn.style.display = pipOk ? "block" : "none";
+    cluster.style.display = "flex";
   }
 
   const watchForVideo = () => {
-    syncPipButton();
-    setInterval(syncPipButton, 1000);
-    document.addEventListener("play", syncPipButton, true);
-    document.addEventListener("enterpictureinpicture", syncPipButton, true);
-    document.addEventListener("leavepictureinpicture", syncPipButton, true);
+    syncVideoControls();
+    setInterval(syncVideoControls, 1000);
+    document.addEventListener("play", syncVideoControls, true);
+    document.addEventListener("enterpictureinpicture", syncVideoControls, true);
+    document.addEventListener("leavepictureinpicture", syncVideoControls, true);
   };
   if (document.body) watchForVideo();
   else document.addEventListener("DOMContentLoaded", watchForVideo, { once: true });

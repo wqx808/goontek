@@ -105,6 +105,24 @@ Press `Ctrl+Shift+D`. It reports whether the network rules and content scripts
 registered, whether they're running in the current frame, and whether the page
 is wider than the panel.
 
+## Making a video bigger
+
+A side panel cannot go fullscreen, so a video gets two controls of its own,
+shown in the corner of the page whenever one is playing:
+
+- **Theater** blacks out the page and fills the panel with the video. Escape or
+  **Exit** returns. The video is restyled where it sits and never moved in the
+  DOM, so playback (including streamed/MSE video such as YouTube) is unaffected.
+- **Pop out** puts it in a floating Picture-in-Picture window outside the panel.
+
+They live in the page rather than the panel because Picture-in-Picture needs a
+user gesture in the frame, and a click in the panel does not carry one across.
+
+For true monitor-wide fullscreen, use **Settings → Troubleshooting → Open this
+page in a browser tab**.
+
+## Something else not rendering?
+
 Two known gaps show up there: the mobile User-Agent doesn't reach content a site
 fetches after load, or nested iframes like embedded players, because those
 requests come from the page's own origin. Sites that remember a "desktop
