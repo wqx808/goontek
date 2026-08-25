@@ -557,6 +557,26 @@ function renderFavourites() {
     el.append(open, remove);
     wrap.appendChild(el);
   }
+
+  renderFavGrid();
+}
+
+/**
+ * The same favourites, laid out for an empty tab. A new tab is the moment you
+ * are most likely to want one, and the stage is otherwise doing nothing.
+ */
+function renderFavGrid() {
+  const grid = $("favgrid");
+  grid.textContent = "";
+  for (const fav of config.favourites) {
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "favtile";
+    open.textContent = fav.name;
+    open.title = fav.url;
+    open.addEventListener("click", () => navigate(fav.url));
+    grid.appendChild(open);
+  }
 }
 
 async function toggleFavourite() {
@@ -807,7 +827,7 @@ const ACCENTS = [
 // both the saved list and the star that adds to it; hiding one without the
 // other leaves a control that acts on something invisible.
 const UI_KEYS = {
-  uiFavourites: ["favpop", "favlist", "fav"],
+  uiFavourites: ["favpop", "favlist", "favgrid", "fav"],
   uiVolume: ["volwrap"],
   uiWidth: ["width"],
   uiClear: ["clear"],

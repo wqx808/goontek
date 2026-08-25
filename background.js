@@ -138,8 +138,9 @@ async function showRail(tabId) {
 }
 
 function markCollapsed(on) {
-  chrome.action.setBadgeText({ text: on ? "•" : "" }).catch(() => {});
-  chrome.action.setBadgeBackgroundColor({ color: "#8a8a86" }).catch(() => {});
+  chrome.action.setBadgeText({ text: on ? "‹‹" : "" }).catch(() => {});
+  chrome.action.setBadgeBackgroundColor({ color: "#3a3a38" }).catch(() => {});
+  chrome.action.setBadgeTextColor?.({ color: "#ffffff" }).catch(() => {});
   chrome.action
     .setTitle({ title: on ? "goontek is hidden. Click to reopen." : "goontek" })
     .catch(() => {});
@@ -162,8 +163,12 @@ async function hideRails() {
 async function collapse() {
   await chrome.storage.session.set({ [COLLAPSED_KEY]: true }).catch(() => {});
   markCollapsed(true);
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (tab) await showRail(tab.id);
+
+  // Every tab in the window, not just the active one. If the active tab is a
+  // browser page the rail cannot be drawn there at all, and this way switching
+  // to any ordinary tab already has one waiting.
+  const tabs = await chrome.tabs.query({ lastFocusedWindow: true }).catch(() => []);
+  await Promise.all(tabs.map((tab) => showRail(tab.id)));
 }
 
 /**

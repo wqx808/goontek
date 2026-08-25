@@ -477,6 +477,41 @@ select.ghost option { background: var(--surface); color: var(--text); }
 .empty p { margin: 0; }
 .empty .hint { font-size: 12px; }
 
+/* The rest of the empty state ignores clicks so it never sits between the user
+   and the frame; the tiles are the exception. */
+.favgrid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 18px;
+  max-width: 340px;
+  pointer-events: auto;
+}
+.favgrid:empty { display: none; }
+
+.favtile {
+  appearance: none;
+  max-width: 150px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 14px;
+  border-radius: var(--pill);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+.favtile:hover {
+  color: var(--text);
+  background: var(--raised);
+  border-color: var(--border-strong);
+}
+
 /* ---------------------------------------------------------- settings */
 
 .ui-off { display: none !important; }
