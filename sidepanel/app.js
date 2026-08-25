@@ -861,6 +861,7 @@ async function diagnose() {
       lines.push(`  userAgentData ${JSON.stringify(pong.seenUAData)}`);
       lines.push(`  platform     ${pong.seenPlatform}`);
       lines.push(`  touchPoints  ${pong.seenTouchPoints}`);
+      lines.push(`  screen       ${pong.seenScreen}`);
       lines.push(`  dpr          ${pong.dpr}`);
       lines.push(`  main patch   ${pong.mobilePatched ? "applied" : "DID NOT RUN"}`);
       lines.push(`  innerWidth   ${pong.innerWidth}`);

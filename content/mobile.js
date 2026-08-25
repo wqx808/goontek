@@ -44,6 +44,17 @@
   // iPhone User-Agent is the single clearest tell, so hide it.
   define(navigator, "userAgentData", undefined);
 
+  // Screen and pixel ratio. Sites that gate on screen.width rather than the
+  // viewport (or pick image density from devicePixelRatio) read these, so an
+  // iPhone 14/15's values back up the User-Agent. iOS reports CSS pixels here.
+  define(screen, "width", 390);
+  define(screen, "height", 844);
+  define(screen, "availWidth", 390);
+  define(screen, "availHeight", 844);
+  define(screen, "colorDepth", 24);
+  define(screen, "pixelDepth", 24);
+  define(window, "devicePixelRatio", 3);
+
   // Touch capability: many sites branch on these existing at all.
   if (!("ontouchstart" in window)) {
     try {

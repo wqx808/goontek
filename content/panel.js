@@ -41,13 +41,25 @@
   announce();
   document.addEventListener("DOMContentLoaded", announce, { once: true });
 
-  // A CSS transform on an ancestor breaks fullscreen rendering, and the panel
-  // scales the frame to fit. Tell it to drop the transform while fullscreen.
   document.addEventListener("fullscreenchange", () => {
-    parent.postMessage(
-      { source: "goontek", type: "fullscreen", on: Boolean(document.fullscreenElement) },
-      "*"
-    );
+    const el = document.fullscreenElement;
+    parent.postMessage({ source: "goontek", type: "fullscreen", on: Boolean(el) }, "*");
+    if (!el) return;
+
+    // A side panel cannot give a video the whole monitor; fullscreen just fills
+    // the narrow panel. Picture-in-Picture floats free of the panel, so convert
+    // to it. This runs in the same task as the user's fullscreen click, which is
+    // what lets the PiP request keep its activation. Exit fullscreen only if PiP
+    // actually starts, so a site whose player forbids PiP is left as it was.
+    const video = el.tagName === "VIDEO" ? el : el.querySelector && el.querySelector("video");
+    if (!video || !document.pictureInPictureEnabled || video.disablePictureInPicture) return;
+
+    video
+      .requestPictureInPicture()
+      .then(() => {
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      })
+      .catch(() => {});
   });
 
   window.addEventListener("message", (event) => {
@@ -88,6 +100,7 @@
           seenUAData: uaData,
           seenPlatform: navigator.platform,
           seenTouchPoints: navigator.maxTouchPoints,
+          seenScreen: `${screen.width}x${screen.height}`,
           dpr: window.devicePixelRatio,
           coarsePointer: matchMedia("(pointer: coarse)").matches,
           mqMobile600: matchMedia("(max-width: 600px)").matches,
