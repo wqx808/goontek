@@ -75,6 +75,12 @@
   // Width-based media queries are left alone: the panel really is narrow, so
   // they already resolve the way a mobile client would.
 
+  // Marker on the shared DOM so the isolated-world script can confirm this ran.
+  // Isolated world cannot see main-world variables, but both see the DOM.
+  try {
+    document.documentElement.setAttribute("data-goontek-ua", "1");
+  } catch {}
+
   // Ensure a mobile viewport even when the server sent desktop markup.
   const setViewport = () => {
     if (!document.head) return;

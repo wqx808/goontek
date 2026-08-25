@@ -39,6 +39,26 @@
       volume = Math.min(1, Math.max(0, Number(msg.value) || 0));
       muted = volume === 0 || Boolean(msg.muted);
       applyAll();
+    } else if (msg.type === "ping") {
+      // Diagnostics. Reaching this at all proves the content script registered
+      // and its extension-frame guard passed.
+      const doc = document.documentElement;
+      const viewport = document.querySelector('meta[name="viewport"]');
+      parent.postMessage(
+        {
+          source: "goontek",
+          type: "pong",
+          url: location.href,
+          innerWidth: window.innerWidth,
+          scrollWidth: Math.max(doc.scrollWidth, document.body ? document.body.scrollWidth : 0),
+          // Set by content/mobile.js in the main world; absent means it did
+          // not run, even though this isolated-world script did.
+          mobilePatched: doc.hasAttribute("data-goontek-ua"),
+          viewport: viewport ? viewport.content : null,
+          readyState: document.readyState,
+        },
+        "*"
+      );
     } else if (msg.type === "pause") {
       // Panic/minimize: stop anything audible immediately.
       muted = true;

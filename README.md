@@ -55,6 +55,7 @@ Chrome 116 or newer, or any Chromium browser based on it.
 | Address bar | `Ctrl+L` |
 | Reload | `Ctrl+R` |
 | Favourite this page | `Ctrl+D` |
+| Diagnostics | `Ctrl+Shift+D` |
 
 Type a bare domain and it becomes `https://`; type anything else and it becomes a
 DuckDuckGo search. Shift-click a favourite to open it in a new tab. Rebind any
@@ -176,6 +177,25 @@ Configuration (favourites, volume) is in `chrome.storage.local`. Session state
 
 Goontek never reads your browsing history. The `history` permission is used only
 for `deleteUrl`.
+
+## When a site does not render properly
+
+Press **Ctrl+Shift+D** in the panel. The report answers, for the frame you are
+looking at:
+
+- whether the network rules and both content scripts actually registered
+- whether the content script is running *in that frame* (`NO RESPONSE` means it
+  is not, which explains both missing mobile layout and missing scaling)
+- whether the main-world mobile patch applied, and what viewport the page ended
+  up with
+- the document's width against the panel's, and whether scaling was applied
+
+Two known limits show up here. Requests made *by* a framed page are attributed to
+that page's origin rather than to the extension, so the mobile User-Agent does
+not reach content the site fetches after load, and neither the User-Agent nor the
+header stripping reaches nested iframes such as embedded players. Sites that
+store a "desktop version" preference as a cookie also override the User-Agent
+entirely, because the panel shares your normal cookie jar.
 
 ## Development
 

@@ -481,11 +481,98 @@ function restore() {
   urlInput.focus();
 }
 
+// -------------------------------------------------------- diagnostics
+
+// Ctrl+Shift+D. Answers, for the frame you are looking at: did the content
+// scripts register, did they run in this frame, did the main-world mobile
+// patch apply, and is the document wider than the panel.
+async function diagnose() {
+  const lines = [];
+  const bg = await chrome.runtime
+    .sendMessage({ type: "goontek:diagnose" })
+    .catch((e) => ({ errors: [`service worker unreachable: ${e.message}`] }));
+
+  lines.push(`extension id   ${bg.id || "?"}`);
+  lines.push(`dynamic rules  ${bg.rules?.length ? bg.rules.join(", ") : "NONE"}`);
+  lines.push(`blocklist      ${bg.blocklist ?? "?"} domains`);
+  lines.push("content scripts");
+  if (bg.scripts?.length) for (const s of bg.scripts) lines.push(`  ${s}`);
+  else lines.push("  NONE REGISTERED");
+
+  const tab = activeTab();
+  lines.push("");
+  if (!tab?.url) {
+    lines.push("active frame   (nothing loaded)");
+  } else {
+    const pong = await pingActiveFrame();
+    if (!pong) {
+      lines.push("active frame   NO RESPONSE");
+      lines.push("  content script is not running in this frame, or its");
+      lines.push("  extension-frame guard rejected it.");
+    } else {
+      lines.push(`active frame   ${pong.url}`);
+      lines.push(`  ready        ${pong.readyState}`);
+      lines.push(`  main-world patch ${pong.mobilePatched ? "applied" : "DID NOT RUN"}`);
+      lines.push(`  viewport     ${pong.viewport || "(none)"}`);
+      lines.push(`  innerWidth   ${pong.innerWidth}`);
+      lines.push(`  scrollWidth  ${pong.scrollWidth}`);
+      const over = pong.scrollWidth - pong.innerWidth;
+      lines.push(`  overflow     ${over > 8 ? `${over}px WIDER than the panel` : "none"}`);
+      lines.push(`  fit applied  ${fits.has(tab.id) ? `yes (${fits.get(tab.id)}px)` : "no"}`);
+    }
+  }
+
+  if (bg.errors?.length) {
+    lines.push("");
+    lines.push("errors");
+    for (const e of bg.errors) lines.push(`  ${e}`);
+  }
+
+  $("diagbody").textContent = lines.join("\n");
+  $("diag").hidden = false;
+}
+
+function pingActiveFrame() {
+  const tab = activeTab();
+  const frame = tab && frames.get(tab.id);
+  if (!frame) return Promise.resolve(null);
+
+  return new Promise((resolve) => {
+    const done = (value) => {
+      clearTimeout(timer);
+      window.removeEventListener("message", onMessage);
+      resolve(value);
+    };
+    const onMessage = (event) => {
+      if (event.source !== frame.contentWindow) return;
+      const msg = event.data;
+      if (msg?.source === "goontek" && msg.type === "pong") done(msg);
+    };
+    const timer = setTimeout(() => done(null), 900);
+    window.addEventListener("message", onMessage);
+    try {
+      frame.contentWindow?.postMessage({ source: "goontek", type: "ping" }, "*");
+    } catch {
+      done(null);
+    }
+  });
+}
+
+$("diagclose").addEventListener("click", () => {
+  $("diag").hidden = true;
+});
+
 // ------------------------------------------------------------ keyboard
 
 document.addEventListener("keydown", (e) => {
   const mod = e.ctrlKey || e.metaKey;
   if (!mod) return;
+
+  if (e.shiftKey && (e.key === "D" || e.key === "d")) {
+    e.preventDefault();
+    diagnose();
+    return;
+  }
 
   if (e.key === "t") {
     e.preventDefault();

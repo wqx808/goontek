@@ -19,6 +19,10 @@ const MOBILE_UA =
   "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) " +
   "Chrome/131.0.0.0 Mobile Safari/537.36";
 
+// Set-up failures are recorded rather than swallowed; without this a failed
+// registration looks identical to an extension that simply does nothing.
+let lastSyncError = null;
+
 chrome.runtime.onInstalled.addListener(async () => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   await sync();
@@ -28,6 +32,7 @@ chrome.runtime.onStartup.addListener(sync);
 
 chrome.commands.onCommand.addListener((command) => {
   if (command === "panic-hide") {
+    // No receiver when the panel is closed, which is not an error.
     chrome.runtime.sendMessage({ type: "goontek:panic" }).catch(() => {});
   }
 });
@@ -41,8 +46,36 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case "goontek:clear-history":
       scrubUrls(msg.urls || []).then((n) => sendResponse({ ok: true, count: n }));
       return true;
+
+    case "goontek:diagnose":
+      diagnose().then(sendResponse);
+      return true;
   }
 });
+
+/** Report what actually got registered, for the panel's diagnostics view. */
+async function diagnose() {
+  const out = { id: chrome.runtime.id, rules: [], scripts: [], blocklist: 0, errors: [] };
+  if (lastSyncError) out.errors.push(`setup: ${lastSyncError}`);
+
+  try {
+    out.rules = (await chrome.declarativeNetRequest.getDynamicRules()).map((r) => r.id);
+  } catch (e) {
+    out.errors.push(`getDynamicRules: ${e.message}`);
+  }
+  try {
+    const scripts = await chrome.scripting.getRegisteredContentScripts();
+    out.scripts = scripts.map((s) => `${s.id} (${s.world}, ${s.runAt})`);
+  } catch (e) {
+    out.errors.push(`getRegisteredContentScripts: ${e.message}`);
+  }
+  try {
+    out.blocklist = (await loadBlocklist()).length;
+  } catch (e) {
+    out.errors.push(`blocklist: ${e.message}`);
+  }
+  return out;
+}
 
 /** Delete the given URLs from browser history. Deleting an absent URL is a no-op. */
 async function scrubUrls(urls) {
@@ -60,7 +93,13 @@ async function scrubUrls(urls) {
 }
 
 async function sync() {
-  await Promise.all([syncRules(), syncScripts()]);
+  try {
+    await Promise.all([syncRules(), syncScripts()]);
+    lastSyncError = null;
+  } catch (e) {
+    lastSyncError = e.message || String(e);
+    console.error("[goontek] setup failed:", e);
+  }
 }
 
 // ------------------------------------------------------------ DNR rules
@@ -150,7 +189,7 @@ async function loadBlocklist() {
 // -------------------------------------------------- content registration
 
 async function syncScripts() {
-  const existing = await chrome.scripting.getRegisteredContentScripts().catch(() => []);
+  const existing = await chrome.scripting.getRegisteredContentScripts();
   const have = new Set(existing.map((s) => s.id));
 
   const wanted = [
@@ -163,14 +202,12 @@ async function syncScripts() {
 
   if (!wanted.length) return;
 
-  await chrome.scripting
-    .registerContentScripts(
-      wanted.map((s) => ({
-        ...s,
-        matches: ["<all_urls>"],
-        allFrames: true,
-        runAt: "document_start",
-      }))
-    )
-    .catch(() => {});
+  await chrome.scripting.registerContentScripts(
+    wanted.map((s) => ({
+      ...s,
+      matches: ["<all_urls>"],
+      allFrames: true,
+      runAt: "document_start",
+    }))
+  );
 }
