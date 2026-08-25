@@ -1,4 +1,4 @@
-/* Goontek — quiet, monochrome, calm. Neutral light/dark via prefers-color-scheme. */
+/* goontek: quiet monochrome UI. Neutral light/dark via prefers-color-scheme. */
 
 :root {
   --bg: #fbfbfa;
@@ -9,10 +9,10 @@
   --border: #e6e6e3;
   --border-strong: #d4d4d0;
   --accent: #3a3a38;
-  --ok: #4a7c59;
   --warn: #9a5b4c;
   --focus: #8a8a86;
   --radius: 9px;
+  --radius-lg: 14px;
   --pill: 999px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
 }
@@ -28,7 +28,6 @@
   --border: #33332f;
   --border-strong: #444440;
   --accent: #d0d0cc;
-  --ok: #7fb08a;
   --warn: #c98a78;
   --focus: #6a6a66;
 }
@@ -43,13 +42,39 @@
     --border: #33332f;
     --border-strong: #444440;
     --accent: #d0d0cc;
-    --ok: #7fb08a;
     --warn: #c98a78;
     --focus: #6a6a66;
   }
 }
 
 * { box-sizing: border-box; }
+
+/* One focus ring for the whole panel. The chrome is pill-shaped, so the UA
+   default ring sits wrong against it; replace it rather than remove it. Only
+   :focus-visible, so clicking a button does not leave a ring behind. */
+:where(button, select, summary, input[type="checkbox"], input[type="range"]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Every hover state moves at the same speed. */
+.icon,
+.ghost,
+.tab,
+.tab-close,
+.fav,
+.fav-remove,
+.wide,
+.keybind,
+.swatch,
+.vol-icon {
+  transition: color 120ms ease, background-color 120ms ease,
+    border-color 120ms ease, opacity 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; }
+}
 
 html, body {
   margin: 0;
@@ -69,11 +94,12 @@ body {
 /* ---------------------------------------------------------- top section */
 
 .bar {
+  position: relative; /* anchors the favourites popover */
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 6px 8px 7px;
+  gap: 5px;
+  padding: 4px 8px 6px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
@@ -115,14 +141,16 @@ body {
 }
 .tab:hover { background: var(--raised); }
 
-.tab[aria-selected="true"] {
+/* A cap of accent along the top is the whole active-tab signal; the hairlines
+   just seat it on the strip. */
+.tab[data-selected="true"] {
   background: var(--bg);
   box-shadow:
-    inset 0 1px 0 var(--border),
+    inset 0 2px 0 var(--accent),
     inset 1px 0 0 var(--border),
     inset -1px 0 0 var(--border);
 }
-.tab[aria-selected="true"]::after {
+.tab[data-selected="true"]::after {
   /* Cover the strip rule so the active tab reads as connected to the page. */
   content: "";
   position: absolute;
@@ -132,7 +160,7 @@ body {
   height: 1px;
   background: var(--bg);
 }
-.tab[aria-selected="true"] .tab-label { color: var(--text); }
+.tab[data-selected="true"] .tab-label { color: var(--text); }
 
 .tab-label {
   appearance: none;
@@ -163,7 +191,8 @@ body {
   border-radius: var(--pill);
 }
 .tab:hover .tab-close,
-.tab[aria-selected="true"] .tab-close { opacity: 0.5; }
+.tab[data-selected="true"] .tab-close { opacity: 0.5; }
+.tab-close:focus-visible { opacity: 1; }
 .tab-close:hover { opacity: 1 !important; color: var(--text); background: var(--border); }
 
 .icon {
@@ -194,29 +223,52 @@ body {
   gap: 4px;
 }
 
+/* Inset rather than outlined: the address bar is the one thing in the header
+   that should read as a field, so it sits below the surface instead of on it. */
 #url {
   flex: 1 1 auto;
   min-width: 0;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  border: 1px solid transparent;
+  background: var(--raised);
   color: var(--text);
   padding: 6px 12px;
   border-radius: var(--pill);
   font-family: inherit;
   font-size: 13px;
 }
-#url:focus { outline: none; border-color: var(--focus); }
+#url:hover { border-color: var(--border); }
+#url:focus {
+  outline: none;
+  background: var(--bg);
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent);
+}
 
 /* --- favourites --- */
 
+/* Drops from the address bar on focus, so it costs no header height when the
+   user is not looking for it. */
+.favpop {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 100%;
+  z-index: 5;
+  margin-top: -2px;
+  padding: 6px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--text) 12%, transparent);
+}
+.favpop[hidden] { display: none; }
+
 .favs {
   display: flex;
+  flex-wrap: wrap;
   gap: 3px;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
-.favs:empty { display: none; }
-.favs::-webkit-scrollbar { display: none; }
 
 .fav {
   display: flex;
@@ -256,6 +308,7 @@ body {
   opacity: 0;
 }
 .fav:hover .fav-remove { opacity: 0.55; }
+.fav-remove:focus-visible { opacity: 1; }
 .fav-remove:hover { opacity: 1 !important; color: var(--text); }
 
 /* --- actions --- */
@@ -290,23 +343,8 @@ select.ghost {
   background-size: 4px 4px, 4px 4px;
   background-repeat: no-repeat;
 }
-select.ghost:focus { outline: none; border-color: var(--focus); }
+select.ghost:focus { border-color: var(--focus); }
 select.ghost option { background: var(--surface); color: var(--text); }
-
-.ghost.on {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.ghost.on::before {
-  content: "";
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--ok);
-  margin-right: 6px;
-  vertical-align: middle;
-}
 
 .ghost.danger:hover {
   color: var(--warn);
@@ -391,7 +429,7 @@ select.ghost option { background: var(--surface); color: var(--text); }
 }
 .vol:hover #vol::-webkit-slider-thumb,
 #vol:focus::-webkit-slider-thumb { opacity: 1; }
-#vol:focus { outline: none; }
+#vol:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 
 .vol[data-level="mute"] #vol::-webkit-slider-runnable-track {
   background: var(--border-strong);
@@ -436,7 +474,7 @@ select.ghost option { background: var(--surface); color: var(--text); }
 }
 .empty.hidden { display: none; }
 .empty p { margin: 0; }
-.empty .hint { font-size: 12px; opacity: 0.75; }
+.empty .hint { font-size: 12px; }
 
 /* ---------------------------------------------------------- settings */
 
@@ -521,7 +559,7 @@ select.ghost option { background: var(--surface); color: var(--text); }
   cursor: pointer;
   padding: 0;
 }
-.swatch-neutral { background: linear-gradient(135deg, #d4d4d0 50%, #3a3a38 50%); }
+.swatch-neutral { background: linear-gradient(135deg, var(--border-strong) 50%, var(--accent) 50%); }
 .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--focus); }
 
 .wide {
@@ -545,13 +583,6 @@ select.ghost option { background: var(--surface); color: var(--text); }
   line-height: 1.5;
   color: var(--muted);
 }
-.sheet-body .note code {
-  font-size: 10px;
-  background: var(--raised);
-  padding: 1px 4px;
-  border-radius: 3px;
-}
-
 /* Donation QR, above everything so it is not read against a scrolling list. */
 .qr-overlay {
   position: fixed;
@@ -568,7 +599,7 @@ select.ghost option { background: var(--surface); color: var(--text); }
 .qr-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   padding: 20px;
   text-align: center;
   max-width: 100%;
@@ -580,7 +611,7 @@ select.ghost option { background: var(--surface); color: var(--text); }
   max-width: 100%;
   display: block;
   margin: 0 auto 12px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: #fff;
   image-rendering: pixelated;
 }
@@ -635,34 +666,6 @@ select.ghost option { background: var(--surface); color: var(--text); }
   white-space: pre-wrap;
   word-break: break-word;
 }
-
-/* --------------------------------------------------------- minimized */
-
-body.minimized .bar,
-body.minimized .stage { display: none; }
-
-.curtain {
-  position: fixed;
-  inset: 0;
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.curtain[hidden] { display: none; }
-
-.reopen {
-  appearance: none;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--muted);
-  font: inherit;
-  font-size: 12px;
-  padding: 8px 20px;
-  border-radius: var(--pill);
-  cursor: pointer;
-}
-.reopen:hover { color: var(--text); border-color: var(--border-strong); }
 
 /* ---------------------------------------------------------------- toast */
 

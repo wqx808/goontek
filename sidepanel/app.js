@@ -35,7 +35,6 @@ let config = {
   ui: {}, // checkbox id -> false when that control is hidden
   keys: null, // filled from DEFAULT_KEYS on first run
 };
-let minimized = false;
 let tabs = []; // [{ id, url }]
 let activeId = null;
 let visited = []; // URLs touched this session, for `clear history`
@@ -61,6 +60,10 @@ async function init() {
     nextId = saved.nextId || tabs.length + 1;
   }
   if (tabs.length === 0) newTab({ focus: false });
+
+  // The panel is running, so it is not collapsed. Clears the flag and any rail
+  // left in a page when it was reopened by the toolbar icon or the shortcut.
+  chrome.runtime.sendMessage({ type: "goontek:opened" }).catch(() => {});
 
   // Tell the worker which domains are already open, so its framing/UA rules
   // cover in-frame navigation even if it restarted and lost its in-memory set.
@@ -145,14 +148,20 @@ function activeTab() {
 function renderTabs() {
   tabsEl.textContent = "";
   for (const tab of tabs) {
+    // The wrapper is decoration. `role="tab"` belongs on the focusable button,
+    // and a tab may not contain other interactive elements, so the close button
+    // sits beside it rather than inside it.
     const el = document.createElement("div");
     el.className = "tab";
-    el.setAttribute("role", "tab");
-    el.setAttribute("aria-selected", String(tab.id === activeId));
+    el.dataset.selected = String(tab.id === activeId);
 
     const label = document.createElement("button");
     label.type = "button";
     label.className = "tab-label";
+    label.setAttribute("role", "tab");
+    label.setAttribute("aria-selected", String(tab.id === activeId));
+    // Roving tabindex: one stop for the whole strip, arrows move between tabs.
+    label.tabIndex = tab.id === activeId ? 0 : -1;
     label.textContent = tab.url ? hostLabel(tab.url) : "new tab";
     label.title = tab.url || "Empty tab";
     label.addEventListener("click", () => activate(tab.id));
@@ -171,6 +180,18 @@ function renderTabs() {
     tabsEl.appendChild(el);
   }
 }
+
+// Left/right move along the strip, as in a real tab bar. Ctrl+1..8 still jumps
+// directly, but nothing advertises it, so arrows are what most people try.
+tabsEl.addEventListener("keydown", (e) => {
+  const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+  if (!step || tabs.length < 2) return;
+  e.preventDefault();
+  const i = tabs.findIndex((t) => t.id === activeId);
+  const next = tabs[(i + step + tabs.length) % tabs.length];
+  activate(next.id);
+  tabsEl.querySelector('[aria-selected="true"]')?.focus();
+});
 
 // ------------------------------------------------------------- frames
 
@@ -205,7 +226,7 @@ function frameFor(tab) {
         clearFit(frame);
       } else {
         // An explicit width applies immediately, whether or not the page
-        // overflows — that is the whole point of forcing a phone width.
+        // overflows, which is the whole point of forcing a phone width.
         applyFit(id);
       }
     });
@@ -254,8 +275,8 @@ window.addEventListener("message", (event) => {
     if (!Number.isFinite(required) || required < 200) return;
     const prev = fits.get(id) || 0;
     // Take the first report, or a substantially larger one. A large jump means
-    // the page genuinely grew — typically a site switching itself to a desktop
-    // layout after load — which we do want to react to. Small changes are
+    // the page genuinely grew (typically a site switching itself to a desktop
+    // layout after load), which we do want to react to. Small changes are
     // re-measurement wobble and are ignored, so the fit does not oscillate.
     if (prev && required <= prev * 1.25) return;
     fits.set(id, required);
@@ -281,21 +302,26 @@ function targetWidth(id) {
   const forced = Number(config.width);
   const reported = fits.get(id) || 0;
   // Phone mode normally pins the layout to the forced width. But if the page
-  // turns out dramatically wider — a site that switched itself to a desktop
-  // layout after load, defeating the narrow viewport — fit that real width
+  // turns out dramatically wider (a site that switched itself to a desktop
+  // layout after load, defeating the narrow viewport), fit that real width
   // instead of clipping it. The page is then all visible, just small, which
   // beats a cropped column with a horizontal scrollbar.
   if (reported > forced * 1.8) return reported;
   return forced;
 }
 
-function applyFit(id) {
+/**
+ * `box` lets a caller fitting several frames measure the stage once. Reading
+ * clientWidth after writing a frame's zoom forces a synchronous layout, so a
+ * loop that re-measures per frame pays for a relayout per frame.
+ */
+function applyFit(id, box) {
   const frame = frames.get(id);
   if (!frame) return;
 
   const target = targetWidth(id);
-  const width = stage.clientWidth;
-  const height = stage.clientHeight;
+  const width = box ? box.width : stage.clientWidth;
+  const height = box ? box.height : stage.clientHeight;
 
   // On auto, leave pages that already fit alone rather than scaling them.
   if (!target || !width || (config.width === "auto" && target <= width + 8)) {
@@ -314,7 +340,8 @@ function applyFit(id) {
 }
 
 function applyFitAll() {
-  for (const id of frames.keys()) applyFit(id);
+  const box = { width: stage.clientWidth, height: stage.clientHeight };
+  for (const id of frames.keys()) applyFit(id, box);
 }
 
 $("width").addEventListener("change", (e) => {
@@ -328,7 +355,6 @@ function clearFit(frame) {
   frame.style.width = "";
   frame.style.height = "";
   frame.style.zoom = "";
-  frame.style.transform = "";
 }
 
 // -------------------------------------------------------- back / forward
@@ -351,7 +377,7 @@ function recordVisit(id, url) {
   if (typeof url !== "string" || url === "about:blank") return;
 
   // Keep the tab's own URL, the address bar, tab label, and favourite star in
-  // sync with where the frame actually is — the frame navigates itself on link
+  // sync with where the frame actually is; the frame navigates itself on link
   // clicks, and the panel only learns the new URL from this report.
   const tab = tabs.find((t) => t.id === id);
   if (tab && tab.url !== url) {
@@ -412,11 +438,30 @@ $("back").addEventListener("click", () => go(-1));
 $("forward").addEventListener("click", () => go(1));
 
 // The panel is user-resizable, so a scaled frame has to be rescaled with it.
-new ResizeObserver(applyFitAll).observe(stage);
+// Dragging the panel edge fires this continuously, and each pass rewrites every
+// frame's zoom, which relayouts the framed document. One pass per frame painted
+// is enough.
+let fitFrame = 0;
+new ResizeObserver(() => {
+  if (fitFrame) return;
+  fitFrame = requestAnimationFrame(() => {
+    fitFrame = 0;
+    applyFitAll();
+  });
+}).observe(stage);
 
 /** Show only the active tab's frame; show the empty state if it has no URL. */
 function showActive() {
   const tab = activeTab();
+
+  // Frames are DOM, so they do not survive the panel closing, but the tab list
+  // does. Rebuild the active tab's frame on demand, or reopening the panel
+  // after a hide shows its URL in the address bar above an empty stage.
+  if (tab?.url && !frames.has(tab.id)) {
+    const frame = frameFor(tab);
+    frame.src = tab.url;
+  }
+
   for (const [id, frame] of frames) {
     frame.classList.toggle("visible", tab != null && id === tab.id);
   }
@@ -443,6 +488,17 @@ function renderFavStar() {
   btn.disabled = !url;
 }
 
+// The list drops from the address bar on focus, the way a browser offers what
+// you might be looking for, instead of holding a row open all the time.
+function showFavourites(on) {
+  $("favpop").hidden = !on || config.favourites.length === 0;
+}
+
+urlInput.addEventListener("focus", () => showFavourites(true));
+urlInput.addEventListener("input", () => showFavourites(urlInput.value === ""));
+// Deferred: a click on a favourite blurs the input before its own handler runs.
+urlInput.addEventListener("blur", () => setTimeout(() => showFavourites(false), 120));
+
 function renderFavourites() {
   const wrap = $("favs");
   wrap.textContent = "";
@@ -458,6 +514,7 @@ function renderFavourites() {
     open.addEventListener("click", (e) => {
       if (e.shiftKey) newTab({ url: fav.url });
       else navigate(fav.url);
+      showFavourites(false);
     });
 
     const remove = document.createElement("button");
@@ -473,6 +530,7 @@ function renderFavourites() {
       renderFavourites();
       renderFavStar();
       toast("Removed from favourites");
+      showFavourites(config.favourites.length > 0);
     });
 
     el.append(open, remove);
@@ -520,6 +578,8 @@ function normalize(raw) {
   }
   // localhost has no dot, and does not serve https by default.
   if (/^localhost(:\d+)?(\/[^\s]*)?$/i.test(raw)) return "http://" + raw;
+  // A LAN address has no TLD to match on, so it would otherwise be searched for.
+  if (/^\d{1,3}(\.\d{1,3}){3}(:\d+)?(\/[^\s]*)?$/.test(raw)) return "http://" + raw;
   const engine = SEARCH_ENGINES[config.search] || SEARCH_ENGINES.duckduckgo;
   return engine + encodeURIComponent(raw);
 }
@@ -660,51 +720,44 @@ $("clear").addEventListener("click", async () => {
   toast(`Cleared ${n} ${n === 1 ? "entry" : "entries"}`);
 });
 
-$("panic").addEventListener("click", () => minimize());
-$("reopen").addEventListener("click", restore);
+$("panic").addEventListener("click", () => collapse());
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg?.type === "goontek:panic") {
-    if (minimized) restore();
-    else minimize();
-  }
+  if (msg?.type === "goontek:panic") collapse();
 });
 
 /**
- * Cover the panel and silence playing media, keeping tabs alive so restore()
- * puts the session back as it was. History is scrubbed here because it is the
- * only trace that outlives the panel.
+ * Close the panel and leave a rail in the page to bring it back.
+ *
+ * Nothing is merely covered. The panel document is destroyed, which stops every
+ * frame outright and gives the page its width back. Tabs live in session
+ * storage, so opening the panel again restores them; history is scrubbed first
+ * because it is the only trace that would outlive the panel.
  */
-async function minimize() {
-  if (minimized) return;
-  minimized = true;
+let collapsing = false;
+async function collapse() {
+  if (collapsing) return;
+  collapsing = true;
 
-  // Silence before painting, so nothing keeps playing behind the curtain.
+  // Silence first. Closing kills the frames anyway, but a page that has already
+  // opened Picture-in-Picture keeps playing outside the panel.
   for (const frame of frames.values()) {
     try {
       frame.contentWindow?.postMessage({ source: "goontek", type: "pause" }, "*");
     } catch {}
   }
 
-  document.body.classList.add("minimized");
-  $("curtain").hidden = false;
-  $("reopen").focus();
-
   if (config.scrubOnHide !== false && visited.length) {
     await chrome.runtime
       .sendMessage({ type: "goontek:clear-history", urls: visited })
       .catch(() => {});
     visited = [];
-    saveSession();
+    await saveSession();
   }
-}
 
-function restore() {
-  minimized = false;
-  document.body.classList.remove("minimized");
-  $("curtain").hidden = true;
-  pushVolumeAll();
-  urlInput.focus();
+  // Draw the rail before closing: after window.close() nothing here runs.
+  await chrome.runtime.sendMessage({ type: "goontek:collapse" }).catch(() => {});
+  window.close();
 }
 
 // ------------------------------------------------------------ settings
@@ -733,7 +786,7 @@ const ACCENTS = [
 // both the saved list and the star that adds to it; hiding one without the
 // other leaves a control that acts on something invisible.
 const UI_KEYS = {
-  uiFavourites: ["favs", "fav"],
+  uiFavourites: ["favpop", "fav"],
   uiVolume: ["volwrap"],
   uiWidth: ["width"],
   uiClear: ["clear"],
@@ -933,7 +986,7 @@ $("copyWallet").addEventListener("click", async () => {
 // Ctrl+Shift+D. Answers, for the frame you are looking at: did the content
 // scripts register, did they run in this frame, did the main-world mobile
 // patch apply, and is the document wider than the panel.
-/** Resolve `p`, but never wait longer than `ms` — a stalled service worker or
+/** Resolve `p`, but never wait longer than `ms`; a stalled service worker or
  *  frame must not leave the panel hanging with nothing shown. */
 function withTimeout(p, ms, fallback) {
   return Promise.race([
@@ -1018,7 +1071,7 @@ async function diagnose() {
         lines.push(`  screen       ${mw.screen}`);
         lines.push(`  dpr          ${mw.dpr}`);
       } else {
-        lines.push("  (not recorded — main-world script did not run here)");
+        lines.push("  (not recorded: main-world script did not run here)");
       }
       lines.push("");
       lines.push("  -- extension's own context (always the real browser) --");

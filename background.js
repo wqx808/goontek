@@ -90,19 +90,103 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 chrome.runtime.onStartup.addListener(sync);
 
-chrome.commands.onCommand.addListener((command) => {
-  if (command === "panic-hide") {
-    // No receiver when the panel is closed, which is not an error.
-    chrome.runtime.sendMessage({ type: "goontek:panic" }).catch(() => {});
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== "panic-hide") return;
+  // The shortcut toggles. While collapsed the panel does not exist, so there is
+  // nobody to receive a message and the worker has to reopen it itself.
+  if (await isCollapsed()) {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab) reopen(tab.id);
+    return;
   }
+  // No receiver when the panel is closed for other reasons, which is not an error.
+  chrome.runtime.sendMessage({ type: "goontek:panic" }).catch(() => {});
+});
+
+// ------------------------------------------------------------- collapse
+//
+// Hiding closes the side panel outright so the page gets its width back. The
+// only thing left behind is a rail injected into the page, which asks to open
+// the panel again. The flag lives in session storage because the worker is
+// evicted whenever it goes idle.
+
+const COLLAPSED_KEY = "goontek:collapsed";
+
+async function isCollapsed() {
+  const got = await chrome.storage.session.get(COLLAPSED_KEY).catch(() => ({}));
+  return got[COLLAPSED_KEY] === true;
+}
+
+/** Draw the rail on one tab. Fails harmlessly on pages extensions cannot touch. */
+async function showRail(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content/rail.js"],
+    });
+  } catch {
+    // chrome:// pages, the Web Store, PDF viewers. The shortcut still works.
+  }
+}
+
+async function hideRails() {
+  const tabs = await chrome.tabs.query({}).catch(() => []);
+  await Promise.all(
+    tabs.map((tab) =>
+      chrome.scripting
+        .executeScript({
+          target: { tabId: tab.id },
+          func: () => document.getElementById("goontek-reopen-rail")?.remove(),
+        })
+        .catch(() => {})
+    )
+  );
+}
+
+async function collapse() {
+  await chrome.storage.session.set({ [COLLAPSED_KEY]: true }).catch(() => {});
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab) await showRail(tab.id);
+}
+
+/**
+ * open() has to be called in a user gesture. A click on the rail is one, but
+ * the gesture belongs to the page's renderer and does not always survive the
+ * hop into the worker. When it does not, say so rather than doing nothing: the
+ * caller leaves the rail up and shows the shortcut instead.
+ */
+async function reopen(tabId) {
+  try {
+    await chrome.sidePanel.open({ tabId });
+  } catch (err) {
+    lastSyncError = `reopen: ${err.message}`;
+    return false;
+  }
+  await chrome.storage.session.set({ [COLLAPSED_KEY]: false }).catch(() => {});
+  await hideRails();
+  return true;
+}
+
+// A page navigation wipes the injected rail, and a tab the user switches to
+// never had one. Redraw so the way back is always on screen while collapsed.
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  if (await isCollapsed()) showRail(tabId);
+});
+
+chrome.tabs.onUpdated.addListener(async (tabId, info) => {
+  if (info.status !== "complete") return;
+  if (await isCollapsed()) showRail(tabId);
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg?.type) {
     case "goontek:visited":
-      // Register the domain for framing/UA coverage, then scrub from history.
-      notePanelDomain(msg.url);
-      scrubUrls([msg.url]).then(() => sendResponse({ ok: true }));
+      // Both must finish before the response, or an idle worker can be evicted
+      // part-way through rebuilding the rules, leaving the new domain uncovered
+      // until something else triggers a sync.
+      Promise.all([notePanelDomain(msg.url), scrubUrls([msg.url])]).then(() =>
+        sendResponse({ ok: true })
+      );
       return true;
 
     case "goontek:frame-domains":
@@ -120,6 +204,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case "goontek:clear-history":
       scrubUrls(msg.urls || []).then((n) => sendResponse({ ok: true, count: n }));
+      return true;
+
+    case "goontek:collapse":
+      collapse().then(() => sendResponse({ ok: true }));
+      return true;
+
+    case "goontek:reopen":
+      reopen(sender.tab?.id).then((ok) => sendResponse({ ok }));
+      return true;
+
+    case "goontek:opened":
+      // The panel is running, so it is by definition not collapsed. Clears the
+      // flag and any stale rail after a reopen by icon or shortcut.
+      chrome.storage.session.set({ [COLLAPSED_KEY]: false }).catch(() => {});
+      hideRails().then(() => sendResponse({ ok: true }));
       return true;
 
     case "goontek:diagnose":
@@ -169,7 +268,7 @@ async function scrubUrls(urls) {
       await chrome.history.deleteUrl({ url });
       count += 1;
     } catch {
-      // history permission revoked or malformed URL — skip it.
+      // history permission revoked or malformed URL, so skip it.
     }
   }
   return count;
@@ -195,7 +294,7 @@ async function syncRules() {
   // the extension (the first load, which the panel drives) OR by a site the
   // user has actually opened in the panel. The latter is needed because when
   // the user clicks a link inside the frame, the frame navigates itself and
-  // the request is initiated by that site's origin, not the extension — so
+  // the request is initiated by that site's origin, not the extension, so
   // without its domain here, the video page's X-Frame-Options refuses to frame.
   //
   // This is narrower than stripping every sub-frame browser-wide: only domains

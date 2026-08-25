@@ -60,7 +60,7 @@
   // A side panel cannot go fullscreen: a real requestFullscreen either fills
   // only the narrow panel or is refused, and players that take the iOS path
   // call video.webkitEnterFullscreen(), which does not exist in desktop Chrome
-  // at all — so the button silently does nothing.
+  // at all, so the button silently does nothing.
   //
   // Route every route to the panel's theater view instead. The handler lives in
   // the isolated world, and a CustomEvent on the shared document is the way to

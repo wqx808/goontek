@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <header class="bar" id="bar">
+    <header class="bar">
       <!-- Row 1: open tabs -->
       <div class="tabstrip">
         <div class="tabs" id="tabs" role="tablist" aria-label="Panel tabs"></div>
@@ -31,8 +31,11 @@
         <button type="button" id="fav" class="icon" title="Add to favourites (Ctrl+D)" aria-label="Add to favourites" aria-pressed="false">☆</button>
       </form>
 
-      <!-- Row 2b: favourites (hidden when empty) -->
-      <div class="favs" id="favs" aria-label="Favourites"></div>
+      <!-- Favourites drop from the address bar on focus rather than holding a
+           row of their own. -->
+      <div class="favpop" id="favpop" hidden>
+        <div class="favs" id="favs" aria-label="Favourites"></div>
+      </div>
 
       <!-- Row 3: layout width, volume, privacy -->
       <div class="actions">
@@ -60,7 +63,7 @@
         <button type="button" id="clear" class="ghost" title="Delete this session's URLs from browser history">
           clear
         </button>
-        <button type="button" id="panic" class="ghost danger" title="Minimize and mute (Ctrl+Shift+H)">
+        <button type="button" id="panic" class="ghost danger" title="Hide and mute (Ctrl+Shift+H)">
           hide
         </button>
         <button type="button" id="settings" class="icon" title="Settings" aria-label="Settings">
@@ -188,11 +191,6 @@
         </span>
       </div>
       <pre id="diagbody"></pre>
-    </div>
-
-    <!-- Shown in place of everything else while minimized. Deliberately blank. -->
-    <div class="curtain" id="curtain" hidden>
-      <button type="button" id="reopen" class="reopen" title="Reopen (Ctrl+Shift+H)">reopen</button>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

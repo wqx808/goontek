@@ -268,7 +268,7 @@
   // Fill the panel with the video.
   //
   // The hard part is that z-index and position:fixed are scoped to the nearest
-  // ancestor with a transform, filter, perspective or containment — which video
+  // ancestor with a transform, filter, perspective or containment, which video
   // players are full of. Promoting only the <video> leaves it trapped inside
   // that ancestor and hidden behind the backdrop, which reads as "everything
   // went black". So every ancestor from the video up to <body> is lifted to
@@ -435,7 +435,7 @@
    * Exit when the player's own fullscreen control is clicked.
    *
    * The Fullscreen API is already intercepted in the main world, but not every
-   * player routes through it — mobile players in particular often implement
+   * player routes through it; mobile players in particular often implement
    * "fullscreen" as their own layout change and never call the API, so nothing
    * arrives to toggle. Catching the click works whatever the player does
    * internally, and only runs while theater is open.
@@ -457,8 +457,11 @@
   }
 
   // A navigation inside the frame throws away the element we promoted.
+  // Full teardown, not just dropping the reference: a page restored from
+  // bfcache would otherwise come back still blacked out, with a dead Exit
+  // button, because exitTheater() returns early once theater is null.
   window.addEventListener("pagehide", () => {
-    if (theater) theater = null;
+    if (theater) exitTheater();
   });
 
   // ------------------------------------------------------- control cluster
@@ -516,13 +519,13 @@
 
   // Never clear these, even if the name also looks like a preference. Removing
   // an age or consent record makes the site show its gate again on every load,
-  // and removing a session logs the user out — both far worse than a stale
+  // and removing a session logs the user out, both far worse than a stale
   // layout preference.
   const KEEP = /age|consent|gdpr|cookie|gate|legal|access|adult|confirm|notice|token|session|auth|login|csrf|remember/i;
 
   // Expire this document's own JS-readable cookies whose name looks like a
   // desktop/mobile preference, and drop matching storage keys. Runs in the
-  // frame's origin, so no extension cookie permission is needed — but it cannot
+  // frame's origin, so no extension cookie permission is needed, but it cannot
   // touch HttpOnly cookies (server-only preferences need a clean profile).
   // Returns what it cleared, for the panel to show.
   function clearPrefs() {
@@ -592,7 +595,7 @@
         kill("__goontek_none");
       } catch {}
 
-      // Names only — values may be session tokens and do not belong in a report
+      // Names only; values may be session tokens and do not belong in a report
       // the user is about to paste somewhere.
       let cookieNames = [];
       try {
@@ -640,7 +643,7 @@
           readyState: document.readyState,
           // The decisive fields: what the site actually sees. If the UA is an
           // iPhone and innerWidth is ~390 but the layout is still desktop, the
-          // site is not deciding layout from either — it is server-side or a
+          // site is not deciding layout from either: it is server-side or a
           // stored preference, and no client-side spoof can change it.
           mainWorld,
           seenUA: navigator.userAgent,
@@ -680,10 +683,21 @@
 
   const start = () => {
     applyAll(false);
-    // Arrow, not a bare reference: an observer callback is passed the mutation
-    // list, which as a truthy first argument would force a re-assert on every
-    // mutation — the very thing that was overriding the user's mute.
-    new MutationObserver(() => applyAll(false)).observe(document.documentElement, {
+    // Players and single-page apps mutate constantly. Coalesce to one sweep per
+    // microtask turn: without it, a document-wide querySelectorAll runs dozens
+    // of times a second on a busy page.
+    let queued = false;
+    const sweep = () => {
+      if (queued) return;
+      queued = true;
+      queueMicrotask(() => {
+        queued = false;
+        // Never pass the mutation list through: a truthy first argument means
+        // "force", which would re-assert over the user's own mute.
+        applyAll(false);
+      });
+    };
+    new MutationObserver(sweep).observe(document.documentElement, {
       childList: true,
       subtree: true,
     });
