@@ -176,10 +176,10 @@ function frameFor(tab) {
       pushVolume(frame);
       // So does layout. This fires for navigations *inside* the frame too,
       // which the panel otherwise never hears about.
+      // Either way, a measurement from the previous page must not carry over.
+      fits.delete(id);
       if (config.width === "auto") {
-        // Auto waits for the page to report an overflow before doing anything;
-        // a stale measurement from the previous page must not carry over.
-        fits.delete(id);
+        // Auto waits for the page to report an overflow before doing anything.
         clearFit(frame);
       } else {
         // An explicit width applies immediately, whether or not the page
@@ -228,9 +228,14 @@ window.addEventListener("message", (event) => {
   if (id === null) return;
 
   if (msg.type === "fit") {
-    if (fits.has(id)) return; // already fitted for this navigation
     const required = Number(msg.required);
     if (!Number.isFinite(required) || required < 200) return;
+    const prev = fits.get(id) || 0;
+    // Take the first report, or a substantially larger one. A large jump means
+    // the page genuinely grew — typically a site switching itself to a desktop
+    // layout after load — which we do want to react to. Small changes are
+    // re-measurement wobble and are ignored, so the fit does not oscillate.
+    if (prev && required <= prev * 1.25) return;
     fits.set(id, required);
     applyFit(id);
   } else if (msg.type === "located") {
@@ -249,8 +254,17 @@ window.addEventListener("message", (event) => {
 
 /** The width to lay the page out at: an explicit choice, or what it measured. */
 function targetWidth(id) {
-  if (config.width !== "auto") return Number(config.width);
-  return fits.get(id) || 0;
+  if (config.width === "auto") return fits.get(id) || 0;
+
+  const forced = Number(config.width);
+  const reported = fits.get(id) || 0;
+  // Phone mode normally pins the layout to the forced width. But if the page
+  // turns out dramatically wider — a site that switched itself to a desktop
+  // layout after load, defeating the narrow viewport — fit that real width
+  // instead of clipping it. The page is then all visible, just small, which
+  // beats a cropped column with a horizontal scrollbar.
+  if (reported > forced * 1.8) return reported;
+  return forced;
 }
 
 function applyFit(id) {

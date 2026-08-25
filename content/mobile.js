@@ -72,6 +72,7 @@
   } catch {}
 
   // Ensure a mobile viewport even when the server sent desktop markup.
+  const WANT = "width=device-width, initial-scale=1, viewport-fit=cover";
   const setViewport = () => {
     if (!document.head) return;
     let meta = document.querySelector('meta[name="viewport"]');
@@ -80,8 +81,23 @@
       meta.name = "viewport";
       document.head.appendChild(meta);
     }
-    meta.content = "width=device-width, initial-scale=1, viewport-fit=cover";
+    if (meta.content !== WANT) meta.content = WANT;
   };
   if (document.head) setViewport();
   else document.addEventListener("DOMContentLoaded", setViewport, { once: true });
+
+  // Some sites rewrite the viewport meta to a fixed desktop width when their
+  // JavaScript switches to a desktop layout after load. Watch for that and put
+  // the mobile viewport back. Cheap: one observer, only reacting to head changes.
+  const guardViewport = () => {
+    if (!document.head) return;
+    new MutationObserver(setViewport).observe(document.head, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["content"],
+    });
+  };
+  if (document.head) guardViewport();
+  else document.addEventListener("DOMContentLoaded", guardViewport, { once: true });
 })();
