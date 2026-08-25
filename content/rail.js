@@ -15,18 +15,38 @@
 
   const host = document.createElement("div");
   host.id = ID;
+
+  // The host carries the positioning, set !important in the page's own cascade
+  // so a site rule cannot move it. Putting it here rather than on a child means
+  // a page that transforms <html> (which would trap a fixed-position
+  // descendant) still cannot pull the rail out of the viewport.
+  for (const [prop, value] of Object.entries({
+    position: "fixed",
+    top: "50%",
+    right: "0px",
+    transform: "translateY(-50%)",
+    "z-index": "2147483647",
+    margin: "0",
+    padding: "0",
+    border: "0",
+    width: "auto",
+    height: "auto",
+    "max-width": "none",
+    "max-height": "none",
+    display: "block",
+    visibility: "visible",
+    opacity: "1",
+    "pointer-events": "auto",
+  })) {
+    host.style.setProperty(prop, value, "important");
+  }
+
   // A shadow root so no page stylesheet can reach in and restyle or hide it.
   const root = host.attachShadow({ mode: "closed" });
 
   const style = document.createElement("style");
   style.textContent = `
-    :host { all: initial; }
     button {
-      position: fixed;
-      top: 50%;
-      right: 0;
-      transform: translateY(-50%);
-      z-index: 2147483647;
       width: 26px;
       padding: 14px 0;
       border: 0;

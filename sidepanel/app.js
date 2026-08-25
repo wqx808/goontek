@@ -488,18 +488,39 @@ function renderFavStar() {
   btn.disabled = !url;
 }
 
-// The list drops from the address bar on focus, the way a browser offers what
-// you might be looking for, instead of holding a row open all the time.
+// The list drops from the address bar rather than holding a row open all the
+// time. Two ways in, because focusing the address bar is not discoverable on
+// its own: the star in the utility row opens it whenever you want it.
 function showFavourites(on) {
-  $("favpop").hidden = !on || config.favourites.length === 0;
+  const show = on && config.favourites.length > 0;
+  $("favpop").hidden = !show;
+  $("favlist").setAttribute("aria-expanded", String(show));
+  $("favlist").classList.toggle("open", show);
 }
+
+$("favlist").addEventListener("click", () => showFavourites($("favpop").hidden));
 
 urlInput.addEventListener("focus", () => showFavourites(true));
 urlInput.addEventListener("input", () => showFavourites(urlInput.value === ""));
 // Deferred: a click on a favourite blurs the input before its own handler runs.
-urlInput.addEventListener("blur", () => setTimeout(() => showFavourites(false), 120));
+// Skipped when the star is what took focus, or it would close on its own click.
+urlInput.addEventListener("blur", () =>
+  setTimeout(() => {
+    if (document.activeElement !== $("favlist")) showFavourites(false);
+  }, 120)
+);
+
+// Anywhere else in the panel closes it.
+document.addEventListener("pointerdown", (e) => {
+  if ($("favpop").hidden) return;
+  if (e.target.closest("#favpop, #favlist, #url")) return;
+  showFavourites(false);
+});
 
 function renderFavourites() {
+  // Nothing to list, nothing to open.
+  $("favlist").hidden = config.favourites.length === 0;
+
   const wrap = $("favs");
   wrap.textContent = "";
   for (const fav of config.favourites) {
@@ -786,7 +807,7 @@ const ACCENTS = [
 // both the saved list and the star that adds to it; hiding one without the
 // other leaves a control that acts on something invisible.
 const UI_KEYS = {
-  uiFavourites: ["favpop", "fav"],
+  uiFavourites: ["favpop", "favlist", "fav"],
   uiVolume: ["volwrap"],
   uiWidth: ["width"],
   uiClear: ["clear"],

@@ -95,7 +95,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   // The shortcut toggles. While collapsed the panel does not exist, so there is
   // nobody to receive a message and the worker has to reopen it itself.
   if (await isCollapsed()) {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (tab) reopen(tab.id);
     return;
   }
@@ -117,16 +117,32 @@ async function isCollapsed() {
   return got[COLLAPSED_KEY] === true;
 }
 
-/** Draw the rail on one tab. Fails harmlessly on pages extensions cannot touch. */
+/**
+ * Draw the rail on one tab, and report whether it took.
+ *
+ * No extension can inject into chrome:// and brave:// pages, the Web Store, or
+ * the PDF viewer, so on those there is nowhere to put a rail at all. The badge
+ * is the fallback: it is drawn on the toolbar icon, which is outside the page
+ * and therefore always available.
+ */
 async function showRail(tabId) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ["content/rail.js"],
     });
+    return true;
   } catch {
-    // chrome:// pages, the Web Store, PDF viewers. The shortcut still works.
+    return false;
   }
+}
+
+function markCollapsed(on) {
+  chrome.action.setBadgeText({ text: on ? "•" : "" }).catch(() => {});
+  chrome.action.setBadgeBackgroundColor({ color: "#8a8a86" }).catch(() => {});
+  chrome.action
+    .setTitle({ title: on ? "goontek is hidden. Click to reopen." : "goontek" })
+    .catch(() => {});
 }
 
 async function hideRails() {
@@ -145,7 +161,8 @@ async function hideRails() {
 
 async function collapse() {
   await chrome.storage.session.set({ [COLLAPSED_KEY]: true }).catch(() => {});
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  markCollapsed(true);
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (tab) await showRail(tab.id);
 }
 
@@ -163,6 +180,7 @@ async function reopen(tabId) {
     return false;
   }
   await chrome.storage.session.set({ [COLLAPSED_KEY]: false }).catch(() => {});
+  markCollapsed(false);
   await hideRails();
   return true;
 }
@@ -218,6 +236,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       // The panel is running, so it is by definition not collapsed. Clears the
       // flag and any stale rail after a reopen by icon or shortcut.
       chrome.storage.session.set({ [COLLAPSED_KEY]: false }).catch(() => {});
+      markCollapsed(false);
       hideRails().then(() => sendResponse({ ok: true }));
       return true;
 

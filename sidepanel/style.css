@@ -141,12 +141,12 @@ body {
 }
 .tab:hover { background: var(--raised); }
 
-/* A cap of accent along the top is the whole active-tab signal; the hairlines
-   just seat it on the strip. */
+/* Seated on the strip, lifted out of the surface. The background change and
+   the hairlines are the whole signal; a coloured cap reads as a warning. */
 .tab[data-selected="true"] {
   background: var(--bg);
   box-shadow:
-    inset 0 2px 0 var(--accent),
+    inset 0 1px 0 var(--border),
     inset 1px 0 0 var(--border),
     inset -1px 0 0 var(--border);
 }
@@ -212,6 +212,7 @@ body {
 .icon:disabled { opacity: 0.3; cursor: default; }
 .icon:disabled:hover { color: var(--muted); background: transparent; }
 .icon[aria-pressed="true"] { color: var(--text); }
+.icon.open { color: var(--text); background: var(--raised); }
 
 .tabstrip .icon { margin-bottom: 3px; }
 
