@@ -24,7 +24,13 @@ Not on the Web Store yet. Needs Chrome 116+.
 | Switch tab | `Ctrl+1` … `Ctrl+8` |
 | Address bar / reload | `Ctrl+L` / `Ctrl+R` |
 | Favourite | `Ctrl+D` |
+| Settings | `Ctrl+,` or the gear |
 | Layout width | dropdown in the panel |
+
+Every shortcut above except tab switching can be rebound under Settings →
+Shortcuts. The two browser-level ones (open panel, hide) are Chrome commands and
+can only be changed at `chrome://extensions/shortcuts`, which the settings panel
+links to.
 | Diagnostics | `Ctrl+Shift+D` |
 
 Hide covers the panel, mutes and pauses every frame, and deletes the session's

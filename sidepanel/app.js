@@ -30,6 +30,7 @@ let config = {
   maxTabs: 8,
   scrubOnHide: true,
   ui: {}, // checkbox id -> false when that control is hidden
+  keys: null, // filled from DEFAULT_KEYS on first run
 };
 let minimized = false;
 let tabs = []; // [{ id, url }]
@@ -45,6 +46,9 @@ init();
 async function init() {
   const stored = (await chrome.storage.local.get(CONFIG_KEY))[CONFIG_KEY] || {};
   config = { ...config, ...stored };
+  // Merge rather than replace, so bindings added in a later version appear
+  // instead of being missing for anyone with saved settings.
+  config.keys = { ...DEFAULT_KEYS, ...(config.keys || {}) };
 
   const saved = (await chrome.storage.session.get(SESSION_KEY))[SESSION_KEY];
   if (saved) {
@@ -615,9 +619,8 @@ function restore() {
 
 // ------------------------------------------------------------ settings
 
-// Paste a Solana address here to enable the donate panel. Left empty on
-// purpose: an address that is wrong or invented sends real money nowhere.
-const SOLANA_WALLET = "";
+// icons/donate-qr.png encodes exactly this string; regenerate it if this changes.
+const SOLANA_WALLET = "3B3cxY82ZmeED45Bqt4XBk7cucKiBZ9moqnPaayw6Fv5";
 const BUG_URL = "https://github.com/wqx808/goontek/issues/new";
 
 const SEARCH_ENGINES = {
@@ -636,12 +639,15 @@ const ACCENTS = [
   ["red", "#dc4a3d"],
 ];
 
+// Each toggle hides every element belonging to that feature. Favourites owns
+// both the saved list and the star that adds to it; hiding one without the
+// other leaves a control that acts on something invisible.
 const UI_KEYS = {
-  uiFavourites: "favs",
-  uiVolume: "volwrap",
-  uiWidth: "width",
-  uiClear: "clear",
-  uiHide: "panic",
+  uiFavourites: ["favs", "fav"],
+  uiVolume: ["volwrap"],
+  uiWidth: ["width"],
+  uiClear: ["clear"],
+  uiHide: ["panic"],
 };
 
 function applyAppearance() {
@@ -652,9 +658,12 @@ function applyAppearance() {
   if (config.accent) root.style.setProperty("--accent", config.accent);
   else root.style.removeProperty("--accent");
 
-  for (const [checkboxId, elementId] of Object.entries(UI_KEYS)) {
-    const el = $(elementId);
-    if (el) el.classList.toggle("ui-off", config.ui?.[checkboxId] === false);
+  for (const [checkboxId, elementIds] of Object.entries(UI_KEYS)) {
+    const off = config.ui?.[checkboxId] === false;
+    for (const elementId of elementIds) {
+      const el = $(elementId);
+      if (el) el.classList.toggle("ui-off", off);
+    }
   }
 }
 
@@ -663,6 +672,7 @@ function renderSettings() {
   $("setMaxTabs").value = String(config.maxTabs);
   $("setSearch").value = config.search;
   $("setScrubOnHide").checked = config.scrubOnHide !== false;
+  renderKeys();
 
   for (const id of Object.keys(UI_KEYS)) {
     $(id).checked = config.ui?.[id] !== false;
@@ -689,9 +699,50 @@ function renderSettings() {
   }
 }
 
-$("settings").addEventListener("click", () => {
+function openSettings() {
   renderSettings();
   $("settingsPanel").hidden = false;
+}
+
+$("settings").addEventListener("click", openSettings);
+
+function renderKeys() {
+  const wrap = $("keys");
+  wrap.textContent = "";
+  for (const [action, { label }] of Object.entries(ACTIONS)) {
+    const row = document.createElement("div");
+    row.className = "row";
+
+    const name = document.createElement("span");
+    name.textContent = label;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "keybind";
+    btn.textContent = capturing === action ? "press keys…" : config.keys[action] || "unset";
+    btn.classList.toggle("capturing", capturing === action);
+    btn.title = "Click, then press the combination. Escape cancels.";
+    btn.addEventListener("click", () => {
+      capturing = action;
+      renderKeys();
+    });
+
+    row.append(name, btn);
+    wrap.appendChild(row);
+  }
+}
+
+$("resetKeys").addEventListener("click", () => {
+  config.keys = { ...DEFAULT_KEYS };
+  saveConfig();
+  renderKeys();
+  toast("Shortcuts reset");
+});
+
+// The two global hotkeys are browser-level commands. Extensions cannot rebind
+// them; only Chrome's own shortcuts page can.
+$("browserKeys").addEventListener("click", () => {
+  chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
 });
 $("settingsClose").addEventListener("click", () => {
   $("settingsPanel").hidden = true;
@@ -736,6 +787,13 @@ $("donate").addEventListener("click", () => {
   const box = $("donateBox");
   box.hidden = !box.hidden;
   $("wallet").textContent = SOLANA_WALLET;
+  const qr = $("qr");
+  if (!qr.firstChild) {
+    const img = document.createElement("img");
+    img.src = "../icons/donate-qr.png";
+    img.alt = "Solana donation address QR code";
+    qr.appendChild(img);
+  }
 });
 
 $("copyWallet").addEventListener("click", async () => {
@@ -830,18 +888,62 @@ $("diagclose").addEventListener("click", () => {
 
 // ------------------------------------------------------------ keyboard
 
+const ACTIONS = {
+  newTab: { label: "New tab", run: () => newTab() },
+  closeTab: { label: "Close tab", run: () => activeId != null && closeTab(activeId) },
+  address: { label: "Address bar", run: () => urlInput.select() },
+  reload: { label: "Reload", run: reload },
+  back: { label: "Back", run: () => go(-1) },
+  forward: { label: "Forward", run: () => go(1) },
+  favourite: { label: "Favourite", run: toggleFavourite },
+  diagnostics: { label: "Diagnostics", run: diagnose },
+  settings: { label: "Settings", run: openSettings },
+};
+
+const DEFAULT_KEYS = {
+  newTab: "Ctrl+T",
+  closeTab: "Ctrl+W",
+  address: "Ctrl+L",
+  reload: "Ctrl+R",
+  back: "Alt+ArrowLeft",
+  forward: "Alt+ArrowRight",
+  favourite: "Ctrl+D",
+  diagnostics: "Ctrl+Shift+D",
+  settings: "Ctrl+,",
+};
+
+/**
+ * Serialise a keydown as "Ctrl+Shift+D". Returns null while only modifiers are
+ * held. Meta is folded into Ctrl so one binding works on both platforms.
+ */
+function comboOf(e) {
+  const key = e.key;
+  if (["Control", "Meta", "Alt", "Shift"].includes(key)) return null;
+
+  const parts = [];
+  if (e.ctrlKey || e.metaKey) parts.push("Ctrl");
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+  parts.push(key.length === 1 ? key.toUpperCase() : key);
+  return parts.join("+");
+}
+
+let capturing = null; // action name while the user is recording a new binding
+
 document.addEventListener("keydown", (e) => {
-  if (e.altKey && !e.ctrlKey && !e.metaKey) {
-    if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      go(-1);
-      return;
+  const combo = comboOf(e);
+  if (!combo) return;
+
+  // Recording a binding swallows everything except the escape hatch.
+  if (capturing) {
+    e.preventDefault();
+    if (e.key !== "Escape") {
+      config.keys = { ...config.keys, [capturing]: combo };
+      saveConfig();
     }
-    if (e.key === "ArrowRight") {
-      e.preventDefault();
-      go(1);
-      return;
-    }
+    capturing = null;
+    renderKeys();
+    return;
   }
 
   if (e.key === "Escape") {
@@ -850,35 +952,21 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
-  const mod = e.ctrlKey || e.metaKey;
-  if (!mod) return;
-
-  if (e.shiftKey && (e.key === "D" || e.key === "d")) {
-    e.preventDefault();
-    diagnose();
-    return;
-  }
-
-  if (e.key === "t") {
-    e.preventDefault();
-    newTab();
-  } else if (e.key === "w") {
-    e.preventDefault();
-    if (activeId != null) closeTab(activeId);
-  } else if (e.key === "l") {
-    e.preventDefault();
-    urlInput.select();
-  } else if (e.key === "r") {
-    e.preventDefault();
-    reload();
-  } else if (e.key === "d") {
-    e.preventDefault();
-    toggleFavourite();
-  } else if (e.key >= "1" && e.key <= "8") {
+  // Ctrl+1..8 selects a tab. Fixed, so it never collides with a rebinding.
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key >= "1" && e.key <= "8") {
     const tab = tabs[Number(e.key) - 1];
     if (tab) {
       e.preventDefault();
       activate(tab.id);
+    }
+    return;
+  }
+
+  for (const [action, binding] of Object.entries(config.keys)) {
+    if (binding === combo && ACTIONS[action]) {
+      e.preventDefault();
+      ACTIONS[action].run();
+      return;
     }
   }
 });

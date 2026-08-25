@@ -491,6 +491,26 @@ select.ghost option { background: var(--surface); color: var(--text); }
 .sheet-body .row select { min-width: 116px; }
 .sheet-body .row input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
 
+.keybind {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 3px 9px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  cursor: pointer;
+  min-width: 108px;
+  text-align: center;
+}
+.keybind:hover { border-color: var(--border-strong); }
+.keybind.capturing {
+  border-color: var(--accent);
+  color: var(--muted);
+  font-style: italic;
+}
+
 .swatches { display: flex; gap: 6px; }
 
 .swatch {
