@@ -16,6 +16,89 @@
   }
   if (!rooted) return;
 
+  // ---------------------------------------------------------- cosmetic ads
+  //
+  // Network blocking cannot touch an ad a site serves from its own domain, and
+  // a blocked slot still leaves an empty hole. This hides the containers.
+  //
+  // Delivered as one stylesheet rather than by querying and removing nodes:
+  // the browser does the matching, it covers elements added later for free, and
+  // there is no observer running on every mutation.
+  //
+  // Every selector is specific. Substring matches on short tokens are the trap
+  // here: [class*="ad-"] also matches thread-, upload-, download-, payload-,
+  // and [id*="ads"] matches downloads and threads. Hiding is used rather than
+  // removal so nothing breaks when a site's own script expects the node.
+  const COSMETIC = [
+    // Known adult-tube ad containers (EasyList-derived)
+    "#pb_template",
+    "#singleFeedSection > .emptyBlockSpace",
+    ".adWrapper",
+    ".removeAdsStyle",
+    "#hAd",
+    ".realsex",
+    "#video-right",
+    "#video-sponsor-links",
+    ".adsbytrafficjunky",
+    "iframe[title*='Campaign']",
+    // YouTube
+    ".video-ads",
+    ".ytp-ad-module",
+    ".ytp-ad-overlay-container",
+    ".ytp-ad-image-overlay",
+    "#player-ads",
+    "#masthead-ad",
+    "ytd-display-ad-renderer",
+    "ytd-ad-slot-renderer",
+    "ytd-promoted-sparkles-web-renderer",
+    "ytd-in-feed-ad-layout-renderer",
+    // Conventional, unambiguous container names
+    ".advertisement",
+    ".ad-container",
+    ".ad-wrapper",
+    ".ad-slot",
+    ".ad-banner",
+    ".ad-unit",
+    "[data-ad-slot]",
+    "[data-adunit]",
+    // Frames from ad networks, matched on the network's own domain
+    "iframe[src*='doubleclick']",
+    "iframe[src*='googlesyndication']",
+    "iframe[src*='adnxs']",
+    "iframe[src*='adsystem']",
+    "iframe[src*='trafficjunky']",
+    "iframe[src*='exoclick']",
+    "iframe[src*='juicyads']",
+    "iframe[src*='popads']",
+  ];
+
+  const COSMETIC_ID = "goontek-cosmetic";
+
+  function applyCosmetic(on) {
+    const existing = document.getElementById(COSMETIC_ID);
+    if (!on) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) return;
+    const style = document.createElement("style");
+    style.id = COSMETIC_ID;
+    style.textContent = COSMETIC.join(",") + "{display:none !important}";
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  // Shares the ad-blocking setting, so one switch governs both layers.
+  try {
+    chrome.storage.local.get("goontek:config").then((got) => {
+      applyCosmetic((got["goontek:config"] || {}).adblock !== false);
+    });
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local" && changes["goontek:config"]) {
+        applyCosmetic((changes["goontek:config"].newValue || {}).adblock !== false);
+      }
+    });
+  } catch {}
+
   let volume = 1;
   let muted = false;
 
