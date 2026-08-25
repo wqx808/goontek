@@ -929,6 +929,10 @@ async function diagnose() {
 
   lines.push(`extension id   ${bg.id || "?"}`);
   lines.push(`dynamic rules  ${bg.rules?.length ? bg.rules.join(", ") : "NONE"}`);
+  if (bg.ruleConditions?.length) {
+    for (const c of bg.ruleConditions) lines.push(`  ${c}`);
+  }
+  lines.push(`panel domains  ${bg.panelDomains?.length ? bg.panelDomains.join(", ") : "(none)"}`);
   lines.push(`blocklist      ${bg.blocklist ?? "?"} domains`);
   lines.push("content scripts");
   if (bg.scripts?.length) for (const s of bg.scripts) lines.push(`  ${s}`);
@@ -941,9 +945,25 @@ async function diagnose() {
   } else {
     const pong = await withTimeout(pingActiveFrame(), 1500, null);
     if (!pong || pong.__err) {
+      const domain = (() => {
+        try {
+          return new URL(tab.url).hostname;
+        } catch {
+          return "";
+        }
+      })();
+      const covered = (bg.panelDomains || []).some((d) => domain.endsWith(d));
       lines.push("active frame   NO RESPONSE");
-      lines.push("  content script is not running in this frame, or its");
-      lines.push("  extension-frame guard rejected it.");
+      lines.push(`  intended url ${tab.url}`);
+      lines.push("  Most likely the frame is showing a browser error page");
+      lines.push("  (\"refused to connect\"), where content scripts cannot run.");
+      lines.push("  That means the framing headers were not stripped for this");
+      lines.push("  request, not that the content script is broken.");
+      lines.push(`  domain covered by framing rule: ${covered ? "yes" : "NO"}`);
+      if (!covered) {
+        lines.push("  -> the site's domain is missing from the rule; reload the");
+        lines.push("     page from the address bar to register it.");
+      }
     } else {
       const frame = frames.get(tab.id);
       lines.push(`active frame   ${pong.url}`);

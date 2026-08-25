@@ -33,6 +33,24 @@ let lastSyncError = null;
 // session cannot grow the rule without bound.
 const panelDomains = new Set();
 const MAX_PANEL_DOMAINS = 100;
+const DOMAINS_KEY = "goontek:panelDomains";
+
+// A service worker is evicted whenever it goes idle, which would drop the set
+// and silently stop covering in-frame navigation mid-session. Mirror it into
+// session storage (cleared on browser shutdown, like the panel's own tabs) and
+// reload it whenever the worker starts cold.
+let domainsReady = null;
+function loadPanelDomains() {
+  if (!domainsReady) {
+    domainsReady = chrome.storage.session
+      .get(DOMAINS_KEY)
+      .then((got) => {
+        for (const d of got[DOMAINS_KEY] || []) panelDomains.add(d);
+      })
+      .catch(() => {});
+  }
+  return domainsReady;
+}
 
 /** Registrable domain of a URL: drops the subdomain, keeps common SLD+ccTLD. */
 function registrableDomain(url) {
@@ -52,12 +70,16 @@ function registrableDomain(url) {
 
 /** Note a domain the panel loaded; rebuild rules if it is new. */
 async function notePanelDomain(url) {
+  await loadPanelDomains();
   const domain = registrableDomain(url);
   if (!domain || panelDomains.has(domain)) return;
   if (panelDomains.size >= MAX_PANEL_DOMAINS) {
     panelDomains.delete(panelDomains.values().next().value); // drop oldest
   }
   panelDomains.add(domain);
+  await chrome.storage.session
+    .set({ [DOMAINS_KEY]: [...panelDomains] })
+    .catch(() => {});
   await syncRules();
 }
 
@@ -112,10 +134,18 @@ async function diagnose() {
   if (lastSyncError) out.errors.push(`setup: ${lastSyncError}`);
 
   try {
-    out.rules = (await chrome.declarativeNetRequest.getDynamicRules()).map((r) => r.id);
+    const rules = await chrome.declarativeNetRequest.getDynamicRules();
+    out.rules = rules.map((r) => r.id);
+    // The conditions matter more than the ids when framing fails, so surface
+    // them here rather than requiring a service-worker console.
+    out.ruleConditions = rules.map(
+      (r) =>
+        `${r.id} ${r.action.type} <- ${(r.condition.initiatorDomains || ["(any)"]).join(", ")}`
+    );
   } catch (e) {
     out.errors.push(`getDynamicRules: ${e.message}`);
   }
+  out.panelDomains = [...panelDomains];
   try {
     const scripts = await chrome.scripting.getRegisteredContentScripts();
     out.scripts = scripts.map((s) => `${s.id} (${s.world}, ${s.runAt})`);
@@ -158,6 +188,7 @@ async function sync() {
 // ------------------------------------------------------------ DNR rules
 
 async function syncRules() {
+  await loadPanelDomains();
   const self = chrome.runtime.id;
 
   // The framing and User-Agent rules apply to sub-frame requests initiated by
