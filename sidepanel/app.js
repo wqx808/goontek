@@ -491,28 +491,45 @@ function renderFavStar() {
 // The list drops from the address bar rather than holding a row open all the
 // time. Two ways in, because focusing the address bar is not discoverable on
 // its own: the star in the utility row opens it whenever you want it.
+//
+// The two behave differently on purpose. Focusing the address bar is a glance,
+// so the list gets out of the way as soon as you look elsewhere. Pressing the
+// star is a decision, so it stays until you press it again. Otherwise the first
+// click into the page closes what you deliberately opened.
+let favPinned = false;
+
 function showFavourites(on) {
   const show = on && config.favourites.length > 0;
+  if (!show) favPinned = false;
   $("favpop").hidden = !show;
   $("favlist").setAttribute("aria-expanded", String(show));
   $("favlist").classList.toggle("open", show);
 }
 
-$("favlist").addEventListener("click", () => showFavourites($("favpop").hidden));
+$("favlist").addEventListener("click", () => {
+  const opening = $("favpop").hidden;
+  showFavourites(opening);
+  favPinned = opening;
+});
 
-urlInput.addEventListener("focus", () => showFavourites(true));
-urlInput.addEventListener("input", () => showFavourites(urlInput.value === ""));
+urlInput.addEventListener("focus", () => {
+  if (!favPinned) showFavourites(true);
+});
+urlInput.addEventListener("input", () => {
+  if (!favPinned) showFavourites(urlInput.value === "");
+});
 // Deferred: a click on a favourite blurs the input before its own handler runs.
 // Skipped when the star is what took focus, or it would close on its own click.
 urlInput.addEventListener("blur", () =>
   setTimeout(() => {
+    if (favPinned) return;
     if (document.activeElement !== $("favlist")) showFavourites(false);
   }, 120)
 );
 
-// Anywhere else in the panel closes it.
+// Anywhere else in the panel closes an unpinned list.
 document.addEventListener("pointerdown", (e) => {
-  if ($("favpop").hidden) return;
+  if ($("favpop").hidden || favPinned) return;
   if (e.target.closest("#favpop, #favlist, #url")) return;
   showFavourites(false);
 });
@@ -1280,6 +1297,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     // Innermost first, so one press does not close everything at once.
     if (!$("donateBox").hidden) closeDonate();
+    else if (!$("favpop").hidden) showFavourites(false);
     else {
       $("settingsPanel").hidden = true;
       $("diag").hidden = true;
