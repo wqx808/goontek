@@ -98,62 +98,14 @@
     (document.head || document.documentElement).appendChild(style);
   }
 
-  // --------------------------------------------------------- skip ads
-
-  // A pre-roll inside the player cannot be blocked at the network level the way
-  // a banner can: the site serves it from its own domain, through its own
-  // player, and the only thing that distinguishes it from the real video is the
-  // site's own markup. What can be done is press the button the site already
-  // gives you, the moment it becomes pressable.
-  let skipping = false;
-  const pressed = new WeakSet();
-
-  // "Skip Ad", "Skip Ads", "Skip Ad in 5".
-  const SKIP_AD = /\bskip\b[^]*\bads?\b/i;
-  // A bare "Skip", allowing a chevron or a countdown: "Skip", "Skip >", "Skip 5".
-  const SKIP_BARE = /^\s*skip\s*[>»→\d\s]*$/i;
-
-  function isSkip(el) {
-    if (pressed.has(el)) return false;
-    // "Skip to content" and "Skip navigation" are accessibility links, always
-    // anchors pointing at a fragment. Clicking one hijacks focus and scrolls.
-    if (el.tagName === "A" && (el.getAttribute("href") || "").startsWith("#")) return false;
-
-    const label = (el.textContent || el.getAttribute("aria-label") || "").trim();
-    if (!SKIP_AD.test(label) && !SKIP_BARE.test(label)) return false;
-    // A countdown is still running; the site will enable it when it is done.
-    if (el.disabled || el.getAttribute("aria-disabled") === "true") return false;
-    const box = el.getBoundingClientRect();
-    return box.width > 0 && box.height > 0;
-  }
-
-  function skipAds() {
-    if (!skipping) return;
-    // Only near a player. A bare "Skip" elsewhere on the page is not ours.
-    if (!document.querySelector("video")) return;
-    for (const el of document.querySelectorAll(
-      'button, a, [role="button"], [class*="skip" i], [id*="skip" i]'
-    )) {
-      if (!isSkip(el)) continue;
-      pressed.add(el);
-      el.click();
-    }
-  }
-
-  // Shares the ad-blocking setting, so one switch governs every layer.
-  function applyAdblock(on) {
-    applyCosmetic(on);
-    skipping = on;
-    if (on) skipAds();
-  }
-
+  // Shares the ad-blocking setting, so one switch governs both layers.
   try {
     chrome.storage.local.get("goontek:config").then((got) => {
-      applyAdblock((got["goontek:config"] || {}).adblock !== false);
+      applyCosmetic((got["goontek:config"] || {}).adblock !== false);
     });
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === "local" && changes["goontek:config"]) {
-        applyAdblock((changes["goontek:config"].newValue || {}).adblock !== false);
+        applyCosmetic((changes["goontek:config"].newValue || {}).adblock !== false);
       }
     });
   } catch {}
@@ -554,12 +506,7 @@
 
   const watchForVideo = () => {
     syncVideoControls();
-    // A skip button is enabled part-way through the ad, so it has to be looked
-    // for repeatedly rather than once when the ad starts.
-    setInterval(() => {
-      syncVideoControls();
-      skipAds();
-    }, 1000);
+    setInterval(syncVideoControls, 1000);
     document.addEventListener("play", syncVideoControls, true);
     document.addEventListener("enterpictureinpicture", syncVideoControls, true);
     document.addEventListener("leavepictureinpicture", syncVideoControls, true);

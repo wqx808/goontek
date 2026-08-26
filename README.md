@@ -66,9 +66,21 @@ On by default, in two layers: known ad and tracker domains are blocked at the
 network level, and known ad containers are hidden with a stylesheet. Turn it off
 under Settings → Browsing.
 
-Two honest limits. It is **browser-wide**, not panel-only, because requests
-from a framed page are attributed to that page, so there is no way to scope the
-rules to the panel. And it cannot stop ads a site serves from its own domain.
+Three honest limits.
+
+**It is browser-wide, not panel-only.** Requests from a framed page are
+attributed to that page rather than to the extension, so there is no way to
+scope the rules to the panel.
+
+**It cannot stop ads a site serves from its own domain.** Those requests are
+indistinguishable from the site's real content.
+
+**In-player video ads get through.** A pre-roll on a video site is served from
+the site's own domain, through the site's own player, as the same kind of
+request as the video you asked for. Nothing distinguishes the two at the network
+level, and blocking the domain would take the video with it. Use the player's
+own Skip button.
+
 Treat it as tracker reduction, not a full ad blocker.
 
 ## Width, and why sites render like a phone
