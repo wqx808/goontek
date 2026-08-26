@@ -39,6 +39,7 @@
     ".realsex",
     "#video-right",
     "#video-sponsor-links",
+    ".ad-footer",
     ".adsbytrafficjunky",
     ".ad-link",
     ".top-top",
@@ -79,6 +80,7 @@
     "iframe[src*='exoclick']",
     "iframe[src*='juicyads']",
     "iframe[src*='popads']",
+    "iframe[src*='bkcdn']",
   ];
 
   const COSMETIC_ID = "goontek-cosmetic";
