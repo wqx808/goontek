@@ -406,12 +406,28 @@
     video.controls = true;
     document.documentElement.style.overflow = "hidden";
 
+    // The browser draws that control bar, and its fullscreen button is drawn in
+    // C++: it never calls the API the main world patches, and its clicks report
+    // the <video> as their target, so nothing in an extension can hook it.
+    // Grey it out rather than leave it looking live, since in this view it is
+    // the one control on the bar that cannot do anything.
+    const dimNativeFs = document.createElement("style");
+    dimNativeFs.textContent =
+      "video[data-goontek-tv]::-webkit-media-controls-fullscreen-button" +
+      "{opacity:0.3 !important;pointer-events:none !important}";
+    (document.head || document.documentElement).appendChild(dimNativeFs);
+
     const exit = makeButton("Exit", "Leave full screen", exitTheater, true);
-    exit.style.cssText += ";position: fixed; top: 10px; right: 10px; z-index: " + Z_CONTROLS + ";";
+    // Same corner the Full screen button occupies, so the pair toggles in
+    // place instead of sending the eye across the panel. Clear of the bottom
+    // edge, because the video now fills the viewport and its control bar runs
+    // along it.
+    exit.style.cssText +=
+      ";position: fixed; right: 10px; bottom: 56px; z-index: " + Z_CONTROLS + ";";
     applyScale(exit);
     (document.body || document.documentElement).appendChild(exit);
 
-    theater = { video, backdrop, exit, saved };
+    theater = { video, backdrop, exit, dimNativeFs, saved };
 
     // Let the page believe it is fullscreen, so its own button toggles back out
     // and its UI updates. mobile.js reads these in the main world.
@@ -428,12 +444,13 @@
 
   function exitTheater() {
     if (!theater) return;
-    const { video, backdrop, exit, saved } = theater;
+    const { video, backdrop, exit, dimNativeFs, saved } = theater;
     for (const { el, cssText } of saved.styles) el.style.cssText = cssText;
     video.controls = saved.controls;
     document.documentElement.style.overflow = saved.overflow;
     backdrop.remove();
     exit.remove();
+    dimNativeFs.remove();
     theater = null;
 
     document.documentElement.removeAttribute("data-goontek-theater");
