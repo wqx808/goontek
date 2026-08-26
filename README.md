@@ -15,7 +15,7 @@ Needs Chrome 116+. Not on the Web Store yet.
 
 ## Shortcuts
 
-| | |
+| Action | Default |
 |---|---|
 | Open / close panel | `Ctrl/Cmd + Shift + Space` |
 | Hide, and bring it back | `Ctrl/Cmd + Shift + H` |
