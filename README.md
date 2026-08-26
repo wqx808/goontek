@@ -91,15 +91,13 @@ Zooming uses CSS `zoom`, so text stays sharp.
 
 ## Video
 
-A side panel cannot go fullscreen. While a video plays, two controls appear in
-the page:
+A side panel cannot go fullscreen. **Theater** is the substitute: while a video
+plays, a button appears in the corner of the page that blacks out the page and
+fills the panel with the video. The player's own fullscreen button does this
+too; Escape or **Exit** returns.
 
-- **Theater** blacks out the page and fills the panel. The player's own
-  fullscreen button does this too; Escape or **Exit** returns.
-- **Pop out** opens Picture-in-Picture, which floats outside the panel.
-
-They sit in the page because Picture-in-Picture needs a user gesture in the
-frame, and a click in the panel doesn't carry one across.
+The button sits in the page, with the player's own controls, rather than in the
+panel's chrome.
 
 For monitor-wide fullscreen, use Settings → Troubleshooting → **Open this page
 in a browser tab**.
@@ -133,7 +131,7 @@ manifest.json     MV3 manifest, permissions, shortcuts
 background.js     Service worker: panel, history scrubbing, network rules
 content/
   mobile.js       Mobile emulation, main world, document_start
-  panel.js        Volume, width, theater, PiP, cosmetic ad hiding
+  panel.js        Volume, width, theater, cosmetic ad hiding
   rail.js         Reopen rail, injected into the page while hidden
 rules/
   blocklist.json  Ad and tracker domains

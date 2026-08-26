@@ -780,8 +780,8 @@ async function collapse() {
   if (collapsing) return;
   collapsing = true;
 
-  // Silence first. Closing kills the frames anyway, but a page that has already
-  // opened Picture-in-Picture keeps playing outside the panel.
+  // Silence first. Closing kills the frames anyway, but a page that has moved
+  // its audio outside the frame keeps playing.
   for (const frame of frames.values()) {
     try {
       frame.contentWindow?.postMessage({ source: "goontek", type: "pause" }, "*");

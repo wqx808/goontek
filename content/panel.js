@@ -189,38 +189,24 @@
     return scored[0].v;
   }
 
-  function toPiP(hint) {
-    const video = pickVideo(hint);
-    if (!video || !document.pictureInPictureEnabled || video.disablePictureInPicture) return;
-    if (document.pictureInPictureElement === video) return;
-    video
-      .requestPictureInPicture()
-      .then(() => {
-        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-      })
-      .catch(() => {});
-  }
-
-  // A side panel cannot give a video the whole monitor. Fullscreen either fills
-  // just the narrow panel or is rejected outright; Picture-in-Picture floats
-  // free of the panel, so hand off to it in both cases. Both handlers run in the
-  // same task as the user's fullscreen click, which preserves the activation the
-  // PiP request needs.
+  // The panel tracks fullscreen state so it can react to a player entering or
+  // leaving it.
   document.addEventListener("fullscreenchange", () => {
     const el = document.fullscreenElement;
     parent.postMessage({ source: "goontek", type: "fullscreen", on: Boolean(el) }, "*");
-    if (el) toPiP(el);
   });
-  document.addEventListener("fullscreenerror", (e) => toPiP(e.target));
 
-  // Two ways to make a video big, since a side panel cannot go fullscreen:
+  // The main-world script normally turns a fullscreen request into theater
+  // before it reaches the browser. In a frame it did not reach, the request
+  // survives and is refused; fall back to theater rather than nothing.
+  document.addEventListener("fullscreenerror", () => enterTheater());
+
+  // A side panel cannot go fullscreen, so Theater is the substitute: black out
+  // the page and fill the panel with the video.
   //
-  //  - Theater: black out the page and fill the panel with the video.
-  //  - Pop out: Picture-in-Picture, a floating window outside the panel.
-  //
-  // Both are driven from buttons injected here rather than from the panel,
-  // because PiP requires a user gesture in THIS document and a postMessage
-  // carries no activation across the frame boundary (verified NotAllowedError).
+  // Its button is injected here rather than drawn by the panel so that it sits
+  // with the player's own controls, and so the click arrives in the same
+  // document as the video it acts on.
 
   // Layer order. The maximum is 2147483647, so the stack is built downward
   // from it rather than giving several elements the same value and relying on
@@ -469,12 +455,9 @@
   // ------------------------------------------------------- control cluster
 
   let cluster = null;
-  let theaterBtn = null;
-  let pipBtn = null;
 
   function syncVideoControls() {
-    const video = usableVideo();
-    const show = Boolean(video) && !theater;
+    const show = Boolean(usableVideo()) && !theater;
 
     if (!show) {
       if (cluster) cluster.style.display = "none";
@@ -486,21 +469,10 @@
       cluster.style.cssText =
         "all: initial; position: fixed; right: 10px; bottom: 10px;" +
         "z-index: " + Z_CONTROLS + "; display: flex; gap: 6px;";
-      theaterBtn = makeButton("Theater", "Fill the panel with the video", enterTheater);
-      pipBtn = makeButton("Pop out", "Play in a floating window (Picture-in-Picture)", () =>
-        toPiP(null)
-      );
-      cluster.append(theaterBtn, pipBtn);
+      cluster.append(makeButton("Theater", "Fill the panel with the video", enterTheater));
       (document.body || document.documentElement).appendChild(cluster);
     }
 
-    // PiP is not always available; theater always is.
-    const pipOk =
-      document.pictureInPictureEnabled &&
-      video &&
-      !video.disablePictureInPicture &&
-      !document.pictureInPictureElement;
-    pipBtn.style.display = pipOk ? "block" : "none";
     cluster.style.display = "flex";
   }
 
@@ -508,8 +480,6 @@
     syncVideoControls();
     setInterval(syncVideoControls, 1000);
     document.addEventListener("play", syncVideoControls, true);
-    document.addEventListener("enterpictureinpicture", syncVideoControls, true);
-    document.addEventListener("leavepictureinpicture", syncVideoControls, true);
   };
   if (document.body) watchForVideo();
   else document.addEventListener("DOMContentLoaded", watchForVideo, { once: true });
@@ -565,8 +535,6 @@
     if (msg.type === "clearPrefs") {
       const cleared = clearPrefs();
       parent.postMessage({ source: "goontek", type: "cleared", cleared }, "*");
-    } else if (msg.type === "pip") {
-      toPiP(null);
     } else if (msg.type === "volume") {
       volume = Math.min(1, Math.max(0, Number(msg.value) || 0));
       muted = volume === 0 || Boolean(msg.muted);
