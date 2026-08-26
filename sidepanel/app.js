@@ -1081,12 +1081,16 @@ async function diagnose() {
       lines.push(`  intended url ${tab.url}`);
       lines.push("  Most likely the frame is showing a browser error page");
       lines.push("  (\"refused to connect\"), where content scripts cannot run.");
-      lines.push("  That means the framing headers were not stripped for this");
-      lines.push("  request, not that the content script is broken.");
+      lines.push("  That means the site refused to be framed, not that the");
+      lines.push("  content script is broken.");
       lines.push(`  domain covered by framing rule: ${covered ? "yes" : "NO"}`);
       if (!covered) {
         lines.push("  -> the site's domain is missing from the rule; reload the");
         lines.push("     page from the address bar to register it.");
+      } else {
+        lines.push("  -> the rule matched, so the headers it knows about were");
+        lines.push("     stripped. Either the site sends a refusal header the");
+        lines.push("     rule does not remove, or it frame-busts in JavaScript.");
       }
     } else {
       const frame = frames.get(tab.id);
