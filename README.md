@@ -83,7 +83,6 @@ the panel. It is the main control over how a site looks.
 - **mobile (390)** and **mobile S (360)**, the default. Forces the phone layout,
   zoomed up to fill the panel.
 - **auto** lays out at the panel's real width, stepping in only on overflow.
-- **desktop (1100)** forces the desktop layout, zoomed down.
 
 A side panel is usually 450 to 550px, which many sites read as a small *desktop*
 window. Pinning to 390px is unambiguously a phone, so the mobile layout wins.
