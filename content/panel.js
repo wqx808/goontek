@@ -194,12 +194,25 @@
   document.addEventListener("fullscreenchange", () => {
     const el = document.fullscreenElement;
     parent.postMessage({ source: "goontek", type: "fullscreen", on: Boolean(el) }, "*");
+
+    // The browser's own media controls are drawn by the browser, so their
+    // fullscreen button never calls the API the main world patches and its
+    // clicks report the <video> as the target. Nothing can intercept it. What
+    // it does do is really enter fullscreen, so hand over: drop theater and let
+    // the browser own the screen, or the two stack and the button looks dead.
+    // The synthetic events theater fires leave fullscreenElement null, so they
+    // do not trip this.
+    if (el && theater) exitTheater();
   });
 
   // The main-world script normally turns a fullscreen request into theater
   // before it reaches the browser. In a frame it did not reach, the request
-  // survives and is refused; fall back to theater rather than nothing.
-  document.addEventListener("fullscreenerror", () => enterTheater());
+  // survives and is refused. Toggle rather than always entering: a refused
+  // request raised from inside theater is someone asking to leave.
+  document.addEventListener("fullscreenerror", () => {
+    if (theater) exitTheater();
+    else enterTheater();
+  });
 
   // A side panel cannot take over the monitor, so this is the substitute: black
   // out the page and fill the panel with the video. Labelled "Full screen" in
