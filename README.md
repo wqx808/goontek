@@ -9,9 +9,14 @@ No accounts, no servers, no telemetry, no build step.
 
 Needs Chrome 116+. Not on the Web Store yet.
 
-1. Open `chrome://extensions` and turn on Developer mode
-2. **Load unpacked**, pick this folder
-3. Press `Ctrl/Cmd + Shift + Space`
+1. Download the ZIP and extract it
+2. Open `chrome://extensions` and turn on Developer mode
+3. **Load unpacked**, and pick the folder that contains `manifest.json`
+4. Press `Ctrl/Cmd + Shift + Space`
+
+On Windows, extracting adds a folder around the one already inside the ZIP, so
+the manifest is usually one level deeper than the folder you just made. Picking
+the outer one gives "Manifest file is missing or unreadable".
 
 ## Shortcuts
 
