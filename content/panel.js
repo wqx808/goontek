@@ -421,6 +421,7 @@
     document.dispatchEvent(new Event("webkitfullscreenchange"));
 
     document.addEventListener("keydown", onTheaterKey, true);
+    document.addEventListener("click", onFsControlClick, true);
     syncVideoControls();
     notifyLayoutChanged(video, true);
   }
@@ -443,6 +444,7 @@
     document.dispatchEvent(new Event("webkitfullscreenchange"));
 
     document.removeEventListener("keydown", onTheaterKey, true);
+    document.removeEventListener("click", onFsControlClick, true);
     syncVideoControls();
     notifyLayoutChanged(video, false);
   }
@@ -489,30 +491,70 @@
     '[data-tooltip-target-id*="fullscreen" i]',
   ].join(",");
 
+  // A real fullscreen button is small. Anything bigger than this is a container
+  // that merely has "fullscreen" somewhere in its class list.
+  const FS_MAX = 120;
+
+  // How far up from the clicked node to look. A click usually lands on an icon
+  // or a <span> inside the button, never more than a couple of levels down.
+  const FS_DEPTH = 4;
+
   /**
-   * Make the player's own fullscreen control drive full-screen view, both ways.
+   * Find the fullscreen button a click landed on, or null.
    *
-   * The Fullscreen API is intercepted in the main world, but not every player
-   * routes through it: plenty implement "fullscreen" as their own layout change
-   * and never call the API, so nothing arrives to act on. Catching the click
-   * works whatever the player does internally.
+   * The naive version of this, `target.closest(FS_CONTROL)`, is wrong in a way
+   * that is easy to miss: closest() walks to the root, and player containers
+   * routinely carry a class like "player-fullscreen-enabled". Every click
+   * anywhere in the player then matched, so watching a video toggled the view
+   * constantly. Three things separate a button from its container:
    *
-   * Listening all the time, not only while the view is open. Only handling the
-   * exit meant the button that should have opened it did nothing on any player
-   * that skips the API.
+   *  - depth: buttons are near the click, containers are far above it
+   *  - size: buttons are small, containers fill the player
+   *  - content: a container holds the <video>, a button never does
+   *
+   * The last check is that the button sits near a video at all, so a stray
+   * "fullscreen" class elsewhere on the page cannot trigger it.
    */
-  function onFsControlClick(e) {
-    const el = e.target && e.target.closest && e.target.closest(FS_CONTROL);
-    if (!el) return;
-    // Never swallow a click on the panel's own controls.
-    if (el === theater?.exit || el.closest("[data-goontek-btn]")) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (theater) exitTheater();
-    else enterTheater();
+  function fsControlFrom(target) {
+    let el = target;
+    for (let i = 0; el && i < FS_DEPTH; i += 1, el = el.parentElement) {
+      if (!el.matches) continue;
+      // goontek's own buttons say "Full screen" on them; never match those.
+      if (el.hasAttribute("data-goontek-btn")) return null;
+      // The media element is never the button, whatever it is classed as. With
+      // native controls on, a click on its own control bar reports it here.
+      if (el.tagName === "VIDEO" || el.tagName === "AUDIO") return null;
+      if (!el.matches(FS_CONTROL)) continue;
+
+      if (el.querySelector("video")) return null; // a container, not a control
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return null;
+      if (r.width > FS_MAX || r.height > FS_MAX) return null;
+
+      // Belongs to a player: some ancestor of it holds the video.
+      for (let p = el.parentElement, d = 0; p && d < 8; p = p.parentElement, d += 1) {
+        if (p.querySelector("video")) return el;
+      }
+      return null;
+    }
+    return null;
   }
 
-  document.addEventListener("click", onFsControlClick, true);
+  /**
+   * Leave full-screen view when the player's own control is pressed.
+   *
+   * Bound only while the view is open. Opening is the main world's job: it
+   * intercepts the Fullscreen API, which is the reliable signal. This exists
+   * because the way back is less reliable, since a player that has switched to
+   * its own fullscreen layout may not call the API again to undo it.
+   */
+  function onFsControlClick(e) {
+    const el = fsControlFrom(e.target);
+    if (!el) return;
+    e.preventDefault();
+    e.stopPropagation();
+    exitTheater();
+  }
 
   function onTheaterKey(e) {
     if (e.key === "Escape") {
