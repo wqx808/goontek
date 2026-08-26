@@ -7,7 +7,7 @@ No accounts, no servers, no telemetry, no build step.
 
 ## Install
 
-Not on the Web Store yet. Needs Chrome 116+.
+Needs Chrome 116+. Not on the Web Store yet.
 
 1. Open `chrome://extensions` and turn on Developer mode
 2. **Load unpacked**, pick this folder
@@ -28,117 +28,103 @@ Not on the Web Store yet. Needs Chrome 116+.
 | Diagnostics | `Ctrl+Shift+D` |
 | Settings | `Ctrl+,` |
 
-All of these except tab switching can be rebound under Settings → Shortcuts. The
-two browser-level ones (open panel, hide) are Chrome commands, changeable only at
-`chrome://extensions/shortcuts`, which Settings links to.
+Rebind under Settings → Shortcuts. The two browser-level ones (open, hide) are
+Chrome commands, changeable only at `chrome://extensions/shortcuts`.
 
 **Shortcuts stop working once you click into the page.** Focus moves inside the
-site's frame and the panel stops seeing keystrokes. The equivalents are buttons
-under Settings → Troubleshooting.
+site's frame. Use the buttons under Settings → Troubleshooting instead.
 
-**Hide** closes the panel outright, so the page gets its width back, and deletes
-the session's URLs from history. A small rail appears on the edge of the page to
-bring it back; the shortcut and the toolbar icon do the same. Tabs live in
-session storage, so reopening puts you back where you were.
+**Hide** closes the panel, so the page gets its width back, and deletes the
+session's URLs from history. A rail appears on the edge of the page to bring it
+back; the shortcut and the toolbar icon do the same. Tabs live in session
+storage, so reopening restores them. Browser pages (`chrome://`, `brave://`)
+take no rail, because no extension can inject into them; the toolbar icon
+carries a badge there instead.
 
 ## Privacy
 
-- Panel browsing doesn't reach `chrome://history`, and URLs are deleted
-  explicitly on top of that.
+- Panel browsing doesn't reach `chrome://history`, and URLs are deleted on top
+  of that.
 - Open tabs live in session storage and die with the browser. Favourites are
-  kept on disk and survive hiding.
+  kept on disk.
 - No network requests of its own, no analytics, no third-party code.
 - `<all_urls>` is needed because the panel can load any site. `history` is only
   ever used to delete.
 
-**Not isolation.** Framed sites are third-party to the panel, which has two
-consequences: some cookies are refused (see below), and nothing here guarantees
-separation from your normal profile. For real isolation, use a separate browser
-profile.
+**Not isolation.** Framed sites share your normal profile's cookie jar. For real
+separation, use a separate browser profile.
 
 **Not every site loads.** Framing headers are stripped for sites you open in the
-panel and links you click inside them, but sites that detect framing in
-JavaScript (most login flows and banks) still refuse.
+panel and links you click inside them, but sites that frame-bust in JavaScript
+still refuse.
 
 ## Ad blocking
 
-On by default, in two layers: known ad and tracker domains are blocked at the
-network level, and known ad containers are hidden with a stylesheet. Turn it off
-under Settings → Browsing.
+On by default, in two layers: ad and tracker domains blocked at the network
+level, and ad containers hidden with a stylesheet. Off under Settings → Browsing.
 
-Three honest limits.
+Three limits worth knowing:
 
-**It is browser-wide, not panel-only.** Requests from a framed page are
-attributed to that page rather than to the extension, so there is no way to
-scope the rules to the panel.
-
-**It cannot stop ads a site serves from its own domain.** Those requests are
-indistinguishable from the site's real content.
-
-**In-player video ads get through.** A pre-roll on a video site is served from
-the site's own domain, through the site's own player, as the same kind of
-request as the video you asked for. Nothing distinguishes the two at the network
-level, and blocking the domain would take the video with it. Use the player's
-own Skip button.
+- **Browser-wide, not panel-only.** Requests from a framed page are attributed
+  to that page, so the rules cannot be scoped to the panel.
+- **No first-party ads.** Anything the site serves from its own domain is
+  indistinguishable from its real content.
+- **No in-player video ads.** A pre-roll comes from the site's own domain,
+  through its own player, as the same kind of request as the video itself.
+  Blocking it would take the video with it. Use the player's Skip button.
 
 Treat it as tracker reduction, not a full ad blocker.
 
-## Width, and why sites render like a phone
+## Width
 
-The width dropdown sets the width the page is *laid out at*, then zooms that to
-fit the panel. It is the main control over how a site looks.
+The dropdown sets the width the page is *laid out* at, then zooms that to fit
+the panel. It is the main control over how a site looks.
 
-- **mobile (390)** and **mobile S (360)**, the default. The page is told it has a
-  phone screen, so responsive sites serve their mobile layout, zoomed up to fill
-  the panel.
-- **auto** lays out at the panel's real width, stepping in only if the page
-  overflows.
+- **mobile (390)** and **mobile S (360)**, the default. Forces the phone layout,
+  zoomed up to fill the panel.
+- **auto** lays out at the panel's real width, stepping in only on overflow.
 - **desktop (1100)** forces the desktop layout, zoomed down.
 
-A side panel is often 450 to 550px, which many sites read as a small *desktop*
-window. Pinning the layout to 390px is unambiguously a phone, so the mobile
-layout wins, the same reason a site looks right on an actual iPhone. Zooming
-uses CSS `zoom`, so text stays sharp.
+A side panel is usually 450 to 550px, which many sites read as a small *desktop*
+window. Pinning to 390px is unambiguously a phone, so the mobile layout wins.
+Zooming uses CSS `zoom`, so text stays sharp.
 
 ## Video
 
-A side panel cannot go fullscreen. Whenever a video is playing, two controls
-appear in the corner of the page:
+A side panel cannot go fullscreen. While a video plays, two controls appear in
+the page:
 
-- **Theater** blacks out the page and fills the panel with the video. The
-  player's own fullscreen button does this too. Escape, **Exit**, or that button
-  again returns.
-- **Pop out** opens Picture-in-Picture, a floating window outside the panel.
+- **Theater** blacks out the page and fills the panel. The player's own
+  fullscreen button does this too; Escape or **Exit** returns.
+- **Pop out** opens Picture-in-Picture, which floats outside the panel.
 
-They sit in the page rather than the panel because Picture-in-Picture needs a
-user gesture in the frame, and a click in the panel doesn't carry one across.
+They sit in the page because Picture-in-Picture needs a user gesture in the
+frame, and a click in the panel doesn't carry one across.
 
-For real monitor-wide fullscreen, use Settings → Troubleshooting → **Open this
-page in a browser tab**.
+For monitor-wide fullscreen, use Settings → Troubleshooting → **Open this page
+in a browser tab**.
 
-## When something misbehaves
+## Troubleshooting
 
-Settings → Troubleshooting → **Diagnostics** reports what the site actually
-sees: the User-Agent and viewport, whether the rules and content scripts are
-live, cookie behaviour, and page width against the panel.
+**Diagnostics** (`Ctrl+Shift+D`) reports what the site actually sees: the
+User-Agent and viewport, whether the rules and content scripts are live, cookie
+behaviour, and page width against the panel.
 
 **A site asks your age or cookie consent every time.** Framed sites are
 third-party, and browsers refuse the ordinary (`SameSite=Lax`) cookies those
-prompts write, so the site never records your answer. Manifest V3 gives an
-extension no way to rewrite `Set-Cookie` to fix this. Either allow third-party
-cookies for that site (Chrome: Settings → Privacy → Third-party cookies → add
-`[*.]example.com`; Brave: Shields → Cookies), or open it in a browser tab.
+prompts write. Manifest V3 gives an extension no way to rewrite `Set-Cookie`.
+Either allow third-party cookies for that site (Chrome: Settings → Privacy →
+Third-party cookies; Brave: Shields → Cookies), or open it in a browser tab.
 Diagnostics confirms it: *normal cookie (SameSite=Lax)* reads `false`.
 
-**A site stays on its desktop layout.** Some sites decide from a preference
-stored the first time you visited in a normal tab. **Request mobile version of
-this site** clears that one site's stored preference and reloads. It only touches
-names that look like a device preference, so your session survives, though it may
-sign you out. Server-set (HttpOnly) preferences need a separate profile.
+**A site stays on its desktop layout.** Some decide from a preference stored the
+first time you visited in a normal tab. **Request mobile version of this site**
+clears that one site's stored preference and reloads. It only touches names that
+look like a device preference, but it may sign you out. Server-set (HttpOnly)
+preferences need a separate profile.
 
-**The mobile User-Agent has gaps.** It doesn't reach content a site fetches after
-load, because those requests come from the page's own origin rather than the
-extension.
+**The mobile User-Agent has gaps.** It doesn't reach content the page fetches
+after load, because those requests come from the page's own origin.
 
 ## Layout
 
