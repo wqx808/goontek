@@ -91,10 +91,10 @@ Zooming uses CSS `zoom`, so text stays sharp.
 
 ## Video
 
-A side panel cannot go fullscreen. **Theater** is the substitute: while a video
-plays, a button appears in the corner of the page that blacks out the page and
-fills the panel with the video. The player's own fullscreen button does this
-too; Escape or **Exit** returns.
+A side panel cannot take over the monitor. **Full screen** is the substitute:
+while a video plays, a button appears in the corner of the page that blacks out
+the page and fills the panel with the video. The player's own fullscreen button
+does this too; Escape or **Exit** returns.
 
 The button sits in the page, with the player's own controls, rather than in the
 panel's chrome.
@@ -130,7 +130,7 @@ manifest.json     MV3 manifest, permissions, shortcuts
 background.js     Service worker: panel, history scrubbing, network rules
 content/
   mobile.js       Mobile emulation, main world, document_start
-  panel.js        Volume, width, theater, cosmetic ad hiding
+  panel.js        Volume, width, full screen, cosmetic ad hiding
   rail.js         Reopen rail, injected into the page while hidden
 rules/
   blocklist.json  Ad and tracker domains
