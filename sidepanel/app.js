@@ -337,6 +337,22 @@ function applyFit(id, box) {
   // and it creates no transformed ancestor, which is what breaks a video's
   // fullscreen inside the frame.
   frame.style.zoom = String(scale);
+  tellScale(frame, scale);
+}
+
+/**
+ * The in-page controls live inside the frame, so the frame's zoom scales them
+ * too: oversized under a phone width, unreadable under a desktop one. Telling
+ * the frame its scale lets the content script cancel it out for those controls
+ * only, so they stay one size whatever the page is laid out at.
+ */
+function tellScale(frame, scale) {
+  try {
+    frame.contentWindow?.postMessage(
+      { source: "goontek", type: "scale", value: scale },
+      "*"
+    );
+  } catch {}
 }
 
 function applyFitAll() {
@@ -355,6 +371,7 @@ function clearFit(frame) {
   frame.style.width = "";
   frame.style.height = "";
   frame.style.zoom = "";
+  tellScale(frame, 1);
 }
 
 // -------------------------------------------------------- back / forward

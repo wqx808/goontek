@@ -259,6 +259,25 @@
     return svg;
   }
 
+  // The panel lays the page out at one width and zooms it to fit, which scales
+  // these controls along with the page. Cancelling that zoom keeps them the
+  // same size on screen whichever width is selected. Offsets need no correction:
+  // the frame's zoom and this one multiply out to 1 for those too.
+  let frameScale = 1;
+  const scaled = new Set();
+
+  function applyScale(el) {
+    scaled.add(el);
+    el.style.zoom = frameScale === 1 ? "" : String(1 / frameScale);
+  }
+
+  function rescaleAll() {
+    for (const el of scaled) {
+      if (el.isConnected) applyScale(el);
+      else scaled.delete(el);
+    }
+  }
+
   function makeButton(label, title, onClick, bracketed) {
     const b = document.createElement("button");
     b.type = "button";
@@ -375,6 +394,7 @@
 
     const exit = makeButton("Exit", "Leave full screen", exitTheater, true);
     exit.style.cssText += ";position: fixed; top: 10px; right: 10px; z-index: " + Z_CONTROLS + ";";
+    applyScale(exit);
     (document.body || document.documentElement).appendChild(exit);
 
     theater = { video, backdrop, exit, saved };
@@ -511,6 +531,7 @@
         makeButton("Full screen", "Fill the panel with the video", enterTheater, true)
       );
       (document.body || document.documentElement).appendChild(cluster);
+      applyScale(cluster);
     }
 
     cluster.style.display = "flex";
@@ -572,7 +593,13 @@
   window.addEventListener("message", (event) => {
     const msg = event.data;
     if (!msg || msg.source !== "goontek") return;
-    if (msg.type === "clearPrefs") {
+    if (msg.type === "scale") {
+      const v = Number(msg.value);
+      if (Number.isFinite(v) && v > 0) {
+        frameScale = v;
+        rescaleAll();
+      }
+    } else if (msg.type === "clearPrefs") {
       const cleared = clearPrefs();
       parent.postMessage({ source: "goontek", type: "cleared", cleared }, "*");
     } else if (msg.type === "volume") {
