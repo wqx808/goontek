@@ -247,21 +247,18 @@ body {
 
 /* --- favourites --- */
 
-/* Drops from the address bar on focus, so it costs no header height when the
-   user is not looking for it. */
+/* A drawer under the header, not a floating card: full width, square, and
+   flush to the header's own rule, so nothing steps in or out at the edges. */
 .favpop {
   position: absolute;
-  left: 8px;
-  right: 8px;
+  left: 0;
+  right: 0;
   top: 100%;
   z-index: 5;
-  margin-top: -2px;
-  padding: 6px 8px;
+  padding: 7px 8px;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-top: 0;
-  border-radius: 0 0 var(--radius) var(--radius);
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--text) 12%, transparent);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--text) 10%, transparent);
 }
 .favpop[hidden] { display: none; }
 
