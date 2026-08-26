@@ -371,8 +371,14 @@
     "will-change: auto !important",
     "contain: none !important",
     "clip-path: none !important",
-    "z-index: " + Z_VIDEO + " !important",
   ].join(";");
+
+  // Only the outermost lifted element is raised above the backdrop. Raising
+  // every one of them put the video above its own siblings, which is where a
+  // player keeps its overlays: a pre-roll's skip and next controls ended up
+  // behind the video, visible through it at best and never clickable. Inside
+  // the lifted container the site's own stacking order is left alone.
+  const LIFT_TOP = "position: fixed !important; z-index: " + Z_VIDEO + " !important";
 
   function enterTheater() {
     if (theater) return;
@@ -405,6 +411,8 @@
     (document.body || document.documentElement).appendChild(backdrop);
 
     for (const el of chain) el.style.cssText += ";" + LIFT;
+    // chain runs video first, outermost last.
+    chain[chain.length - 1].style.cssText += ";" + LIFT_TOP;
     // Only the video letterboxes; the containers are plain black fill.
     video.style.cssText += ";object-fit: contain !important;";
     // The page's own controls are behind the backdrop now.
