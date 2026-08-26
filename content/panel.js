@@ -297,6 +297,7 @@
     b.title = title;
     b.setAttribute("aria-label", title);
     b.style.cssText = BTN_STYLE;
+    b.setAttribute("data-goontek-btn", "1");
     if (bracketed) b.appendChild(makeBracket(BRACKET_LEFT));
     const text = document.createElement("span");
     text.textContent = label;
@@ -420,7 +421,6 @@
     document.dispatchEvent(new Event("webkitfullscreenchange"));
 
     document.addEventListener("keydown", onTheaterKey, true);
-    document.addEventListener("click", onTheaterClick, true);
     syncVideoControls();
     notifyLayoutChanged(video, true);
   }
@@ -443,7 +443,6 @@
     document.dispatchEvent(new Event("webkitfullscreenchange"));
 
     document.removeEventListener("keydown", onTheaterKey, true);
-    document.removeEventListener("click", onTheaterClick, true);
     syncVideoControls();
     notifyLayoutChanged(video, false);
   }
@@ -491,21 +490,29 @@
   ].join(",");
 
   /**
-   * Exit when the player's own fullscreen control is clicked.
+   * Make the player's own fullscreen control drive full-screen view, both ways.
    *
-   * The Fullscreen API is already intercepted in the main world, but not every
-   * player routes through it; mobile players in particular often implement
-   * "fullscreen" as their own layout change and never call the API, so nothing
-   * arrives to toggle. Catching the click works whatever the player does
-   * internally, and only runs while theater is open.
+   * The Fullscreen API is intercepted in the main world, but not every player
+   * routes through it: plenty implement "fullscreen" as their own layout change
+   * and never call the API, so nothing arrives to act on. Catching the click
+   * works whatever the player does internally.
+   *
+   * Listening all the time, not only while the view is open. Only handling the
+   * exit meant the button that should have opened it did nothing on any player
+   * that skips the API.
    */
-  function onTheaterClick(e) {
+  function onFsControlClick(e) {
     const el = e.target && e.target.closest && e.target.closest(FS_CONTROL);
     if (!el) return;
+    // Never swallow a click on the panel's own controls.
+    if (el === theater?.exit || el.closest("[data-goontek-btn]")) return;
     e.preventDefault();
     e.stopPropagation();
-    exitTheater();
+    if (theater) exitTheater();
+    else enterTheater();
   }
+
+  document.addEventListener("click", onFsControlClick, true);
 
   function onTheaterKey(e) {
     if (e.key === "Escape") {
