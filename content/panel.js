@@ -391,6 +391,11 @@
       styles: chain.map((el) => ({ el, cssText: el.style.cssText })),
       controls: video.controls,
       overflow: document.documentElement.style.overflow,
+      // Lifting the ancestors out of flow collapses the document's height,
+      // which clamps the scroll to the top. Without this the page comes back
+      // scrolled somewhere else than it was left.
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
     };
 
     const backdrop = document.createElement("div");
@@ -448,6 +453,17 @@
     for (const { el, cssText } of saved.styles) el.style.cssText = cssText;
     video.controls = saved.controls;
     document.documentElement.style.overflow = saved.overflow;
+
+    // Put the page back where it was, behind the backdrop so the jump is not
+    // seen. scroll-behavior is forced off first: a site that sets it to smooth
+    // would animate this, which is the slide from the bottom of the page back
+    // up that made leaving look broken.
+    const root = document.documentElement;
+    const behavior = root.style.scrollBehavior;
+    root.style.scrollBehavior = "auto";
+    window.scrollTo(saved.scrollX, saved.scrollY);
+    root.style.scrollBehavior = behavior;
+
     backdrop.remove();
     exit.remove();
     dimNativeFs.remove();
