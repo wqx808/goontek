@@ -221,8 +221,8 @@
     "font: 600 12px/1 -apple-system, system-ui, sans-serif",
     "display: inline-flex",
     "align-items: center",
-    "gap: 6px",
-    "padding: 8px 12px",
+    "gap: 7px",
+    "padding: 8px 13px",
     "border-radius: 999px",
     "background: rgba(20,20,20,0.82)",
     "color: #fff",
@@ -230,25 +230,27 @@
     "box-shadow: 0 2px 10px rgba(0,0,0,0.35)",
   ].join(";");
 
-  // The four corner brackets every player uses for fullscreen: pointing out to
-  // enter, pointing in to leave.
-  const ICON_EXPAND = ["M2 6V2h4", "M10 2h4v4", "M14 10v4h-4", "M6 14H2v-4"];
-  const ICON_CONTRACT = ["M6 2v4H2", "M14 6h-4V2", "M10 14v-4h4", "M2 10h4v4"];
+  // The corner brackets a player draws around its fullscreen control, split so
+  // one half sits either side of the label: the text ends up framed the way the
+  // video would be, rather than carrying a small square icon in front of it.
+  const BRACKET_LEFT = ["M6 2H2v4", "M2 10v4h4"];
+  const BRACKET_RIGHT = ["M2 2h4v4", "M6 10v4h-4"];
 
   const SVG_NS = "http://www.w3.org/2000/svg";
 
-  function makeIcon(paths) {
+  function makeBracket(paths) {
     const svg = document.createElementNS(SVG_NS, "svg");
-    svg.setAttribute("viewBox", "0 0 16 16");
-    svg.setAttribute("width", "13");
-    svg.setAttribute("height", "13");
+    // Half as wide as it is tall, so the pair reads as one frame around the text.
+    svg.setAttribute("viewBox", "0 0 8 16");
+    svg.setAttribute("width", "6");
+    svg.setAttribute("height", "12");
     svg.setAttribute("aria-hidden", "true");
     svg.setAttribute("fill", "none");
     svg.setAttribute("stroke", "currentColor");
     svg.setAttribute("stroke-width", "1.7");
     svg.setAttribute("stroke-linecap", "round");
     svg.setAttribute("stroke-linejoin", "round");
-    svg.style.cssText = "display:block;flex:none";
+    svg.style.cssText = "display:block;flex:none;opacity:0.85";
     for (const d of paths) {
       const p = document.createElementNS(SVG_NS, "path");
       p.setAttribute("d", d);
@@ -257,17 +259,18 @@
     return svg;
   }
 
-  function makeButton(label, title, onClick, paths) {
+  function makeButton(label, title, onClick, bracketed) {
     const b = document.createElement("button");
     b.type = "button";
     b.title = title;
     b.setAttribute("aria-label", title);
     b.style.cssText = BTN_STYLE;
-    if (paths) b.appendChild(makeIcon(paths));
+    if (bracketed) b.appendChild(makeBracket(BRACKET_LEFT));
     const text = document.createElement("span");
     text.textContent = label;
     text.style.cssText = "all: unset";
     b.appendChild(text);
+    if (bracketed) b.appendChild(makeBracket(BRACKET_RIGHT));
     b.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -370,7 +373,7 @@
     video.controls = true;
     document.documentElement.style.overflow = "hidden";
 
-    const exit = makeButton("Exit", "Leave full screen", exitTheater, ICON_CONTRACT);
+    const exit = makeButton("Exit", "Leave full screen", exitTheater, true);
     exit.style.cssText += ";position: fixed; top: 10px; right: 10px; z-index: " + Z_CONTROLS + ";";
     (document.body || document.documentElement).appendChild(exit);
 
@@ -505,7 +508,7 @@
         "all: initial; position: fixed; right: 10px; bottom: 10px;" +
         "z-index: " + Z_CONTROLS + "; display: flex; gap: 6px;";
       cluster.append(
-        makeButton("Full screen", "Fill the panel with the video", enterTheater, ICON_EXPAND)
+        makeButton("Full screen", "Fill the panel with the video", enterTheater, true)
       );
       (document.body || document.documentElement).appendChild(cluster);
     }
