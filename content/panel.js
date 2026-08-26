@@ -406,12 +406,23 @@
     video.controls = true;
     document.documentElement.style.overflow = "hidden";
 
+    // The browser draws that control bar, and its fullscreen button is drawn in
+    // C++: it never calls the API the main world patches, and its clicks report
+    // the <video> as their target, so nothing can hook it. Rather than leave a
+    // button that looks like the way out and is not, take it off the bar. Exit
+    // and Escape remain, and they work.
+    const hideNativeFs = document.createElement("style");
+    hideNativeFs.textContent =
+      "video[data-goontek-tv]::-webkit-media-controls-fullscreen-button" +
+      "{display:none !important}";
+    (document.head || document.documentElement).appendChild(hideNativeFs);
+
     const exit = makeButton("Exit", "Leave full screen", exitTheater, true);
     exit.style.cssText += ";position: fixed; top: 10px; right: 10px; z-index: " + Z_CONTROLS + ";";
     applyScale(exit);
     (document.body || document.documentElement).appendChild(exit);
 
-    theater = { video, backdrop, exit, saved };
+    theater = { video, backdrop, exit, hideNativeFs, saved };
 
     // Let the page believe it is fullscreen, so its own button toggles back out
     // and its UI updates. mobile.js reads these in the main world.
@@ -428,12 +439,13 @@
 
   function exitTheater() {
     if (!theater) return;
-    const { video, backdrop, exit, saved } = theater;
+    const { video, backdrop, exit, hideNativeFs, saved } = theater;
     for (const { el, cssText } of saved.styles) el.style.cssText = cssText;
     video.controls = saved.controls;
     document.documentElement.style.overflow = saved.overflow;
     backdrop.remove();
     exit.remove();
+    hideNativeFs.remove();
     theater = null;
 
     document.documentElement.removeAttribute("data-goontek-theater");
