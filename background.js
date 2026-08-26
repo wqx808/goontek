@@ -337,6 +337,12 @@ async function syncRules() {
           { header: "content-security-policy", operation: "remove" },
           { header: "content-security-policy-report-only", operation: "remove" },
           { header: "frame-options", operation: "remove" },
+          // Cross-Origin-Resource-Policy is checked on nested navigations, not
+          // just on subresources, so `same-origin` refuses the frame on its own
+          // even with X-Frame-Options and the CSP already gone. x.com is the
+          // case that surfaced this: it sends all three.
+          { header: "cross-origin-resource-policy", operation: "remove" },
+          { header: "cross-origin-embedder-policy", operation: "remove" },
         ],
       },
       condition: { resourceTypes: ["sub_frame"], initiatorDomains: initiators },
