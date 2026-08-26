@@ -18,17 +18,15 @@
 
   // ---------------------------------------------------------- cosmetic ads
   //
-  // Network blocking cannot touch an ad a site serves from its own domain, and
-  // a blocked slot still leaves an empty hole. This hides the containers.
+  // Network blocking cannot touch an ad served from the site's own domain, and
+  // a blocked slot still leaves a hole. This hides the containers.
   //
-  // Delivered as one stylesheet rather than by querying and removing nodes:
-  // the browser does the matching, it covers elements added later for free, and
-  // there is no observer running on every mutation.
+  // One stylesheet rather than querying and removing nodes: the browser does
+  // the matching, later elements are covered for free, and no observer runs.
   //
-  // Every selector is specific. Substring matches on short tokens are the trap
-  // here: [class*="ad-"] also matches thread-, upload-, download-, payload-,
-  // and [id*="ads"] matches downloads and threads. Hiding is used rather than
-  // removal so nothing breaks when a site's own script expects the node.
+  // Selectors are specific on purpose. [class*="ad-"] also matches thread-,
+  // upload- and download-; [id*="ads"] matches downloads and threads. Hidden
+  // rather than removed, so a site's own script still finds the node.
   const COSMETIC = [
     // Known adult-tube ad containers (EasyList-derived)
     "#pb_template",
@@ -195,20 +193,15 @@
     const el = document.fullscreenElement;
     parent.postMessage({ source: "goontek", type: "fullscreen", on: Boolean(el) }, "*");
 
-    // The browser's own media controls are drawn by the browser, so their
-    // fullscreen button never calls the API the main world patches and its
-    // clicks report the <video> as the target. Nothing can intercept it. What
-    // it does do is really enter fullscreen, so hand over: drop theater and let
-    // the browser own the screen, or the two stack and the button looks dead.
-    // The synthetic events theater fires leave fullscreenElement null, so they
-    // do not trip this.
+    // The browser's own control bar cannot be hooked: its fullscreen button
+    // calls no patchable API and reports the <video> as its click target. It
+    // does really enter fullscreen, so hand over rather than stack the two.
+    // Theater's synthetic events leave fullscreenElement null and are ignored.
     if (el && theater) exitTheater();
   });
 
-  // The main-world script normally turns a fullscreen request into theater
-  // before it reaches the browser. In a frame it did not reach, the request
-  // survives and is refused. Toggle rather than always entering: a refused
-  // request raised from inside theater is someone asking to leave.
+  // In a frame the main-world script did not reach, the request survives and is
+  // refused. A refusal raised from inside theater means someone wants out.
   document.addEventListener("fullscreenerror", () => {
     if (theater) exitTheater();
     else enterTheater();
@@ -216,11 +209,8 @@
 
   // A side panel cannot take over the monitor, so this is the substitute: black
   // out the page and fill the panel with the video. Labelled "Full screen" in
-  // the UI; "theater" is kept as the internal name throughout this file.
-  //
-  // Its button is injected here rather than drawn by the panel so that it sits
-  // with the player's own controls, and so the click arrives in the same
-  // document as the video it acts on.
+  // the UI; "theater" is the internal name throughout this file. Its button is
+  // injected here so the click arrives in the same document as the video.
 
   // Layer order. The maximum is 2147483647, so the stack is built downward
   // from it rather than giving several elements the same value and relying on
@@ -243,9 +233,7 @@
     "box-shadow: 0 2px 10px rgba(0,0,0,0.35)",
   ].join(";");
 
-  // The corner brackets a player draws around its fullscreen control, split so
-  // one half sits either side of the label: the text ends up framed the way the
-  // video would be, rather than carrying a small square icon in front of it.
+  // Half a fullscreen corner icon each, so the pair frames the label.
   const BRACKET_LEFT = ["M6 2H2v4", "M2 10v4h4"];
   const BRACKET_RIGHT = ["M2 2h4v4", "M6 10v4h-4"];
 
@@ -253,7 +241,6 @@
 
   function makeBracket(paths) {
     const svg = document.createElementNS(SVG_NS, "svg");
-    // Half as wide as it is tall, so the pair reads as one frame around the text.
     svg.setAttribute("viewBox", "0 0 8 16");
     svg.setAttribute("width", "6");
     svg.setAttribute("height", "12");
@@ -326,16 +313,13 @@
 
   // Fill the panel with the video.
   //
-  // The hard part is that z-index and position:fixed are scoped to the nearest
-  // ancestor with a transform, filter, perspective or containment, which video
-  // players are full of. Promoting only the <video> leaves it trapped inside
-  // that ancestor and hidden behind the backdrop, which reads as "everything
-  // went black". So every ancestor from the video up to <body> is lifted to
-  // fill the viewport too, with those properties neutralised, which makes the
-  // chain escape cleanly at each level.
+  // z-index and position:fixed are scoped to the nearest ancestor with a
+  // transform, filter, perspective or containment, and players are full of
+  // those. Promoting only the <video> leaves it trapped behind the backdrop,
+  // so every ancestor up to <body> is lifted with those properties cleared.
   //
-  // Nothing is re-parented and no source is touched, so streamed (MSE/blob)
-  // playback such as YouTube keeps running.
+  // Nothing is re-parented and no source is touched, so MSE/blob playback
+  // keeps running.
   const LIFT = [
     "position: fixed !important",
     "top: 0 !important",
@@ -359,12 +343,9 @@
     "visibility: visible !important",
     "display: block !important",
     "overflow: visible !important",
-    // Players hide the pointer during fullscreen playback; in a panel that just
-    // leaves the user with no visible cursor.
-    "cursor: auto !important",
+    // Players hide the pointer in fullscreen; here that just loses the cursor.
     "pointer-events: auto !important",
-    // These are what create a containing block / stacking context and trap the
-    // element. Clearing them is the whole trick.
+    // These create a containing block and trap the element.
     "transform: none !important",
     "filter: none !important",
     "perspective: none !important",
@@ -373,11 +354,9 @@
     "clip-path: none !important",
   ].join(";");
 
-  // Only the outermost lifted element is raised above the backdrop. Raising
-  // every one of them put the video above its own siblings, which is where a
-  // player keeps its overlays: a pre-roll's skip and next controls ended up
-  // behind the video, visible through it at best and never clickable. Inside
-  // the lifted container the site's own stacking order is left alone.
+  // Only the outermost lifted element is raised above the backdrop. Raising all
+  // of them would put the video above its own siblings, where players keep
+  // their overlays, burying skip and next controls behind it.
   const LIFT_TOP = "position: fixed !important; z-index: " + Z_VIDEO + " !important";
 
   function enterTheater() {
@@ -419,11 +398,8 @@
     video.controls = true;
     document.documentElement.style.overflow = "hidden";
 
-    // The browser draws that control bar, and its fullscreen button is drawn in
-    // C++: it never calls the API the main world patches, and its clicks report
-    // the <video> as their target, so nothing in an extension can hook it.
-    // Grey it out rather than leave it looking live, since in this view it is
-    // the one control on the bar that cannot do anything.
+    // Its fullscreen button cannot be hooked (see the fullscreenchange handler
+    // above), so grey it out rather than leave it looking live.
     const dimNativeFs = document.createElement("style");
     dimNativeFs.textContent =
       "video[data-goontek-tv]::-webkit-media-controls-fullscreen-button" +
@@ -431,10 +407,8 @@
     (document.head || document.documentElement).appendChild(dimNativeFs);
 
     const exit = makeButton("Exit", "Leave full screen", exitTheater, true);
-    // Same corner the Full screen button occupies, so the pair toggles in
-    // place instead of sending the eye across the panel. Clear of the bottom
-    // edge, because the video now fills the viewport and its control bar runs
-    // along it.
+    // The corner Full screen occupies, so the pair toggles in place. Clear of
+    // the bottom edge, where the video's control bar now runs.
     exit.style.cssText +=
       ";position: fixed; right: 10px; bottom: 56px; z-index: " + Z_CONTROLS + ";";
     applyScale(exit);
@@ -462,10 +436,8 @@
     video.controls = saved.controls;
     document.documentElement.style.overflow = saved.overflow;
 
-    // Put the page back where it was, behind the backdrop so the jump is not
-    // seen. scroll-behavior is forced off first: a site that sets it to smooth
-    // would animate this, which is the slide from the bottom of the page back
-    // up that made leaving look broken.
+    // Behind the backdrop, so the jump is not seen. scroll-behavior is forced
+    // off because a site that sets it to smooth would animate the correction.
     const root = document.documentElement;
     const behavior = root.style.scrollBehavior;
     root.style.scrollBehavior = "auto";
@@ -543,18 +515,10 @@
   /**
    * Find the fullscreen button a click landed on, or null.
    *
-   * The naive version of this, `target.closest(FS_CONTROL)`, is wrong in a way
-   * that is easy to miss: closest() walks to the root, and player containers
-   * routinely carry a class like "player-fullscreen-enabled". Every click
-   * anywhere in the player then matched, so watching a video toggled the view
-   * constantly. Three things separate a button from its container:
-   *
-   *  - depth: buttons are near the click, containers are far above it
-   *  - size: buttons are small, containers fill the player
-   *  - content: a container holds the <video>, a button never does
-   *
-   * The last check is that the button sits near a video at all, so a stray
-   * "fullscreen" class elsewhere on the page cannot trigger it.
+   * Not closest(FS_CONTROL): that walks to the root, and player containers
+   * carry classes like "player-fullscreen-enabled", so every click in the
+   * player would match. A button is near the click, small, holds no <video>,
+   * and has one above it.
    */
   function fsControlFrom(target) {
     let el = target;
@@ -582,12 +546,9 @@
   }
 
   /**
-   * Leave full-screen view when the player's own control is pressed.
-   *
-   * Bound only while the view is open. Opening is the main world's job: it
-   * intercepts the Fullscreen API, which is the reliable signal. This exists
-   * because the way back is less reliable, since a player that has switched to
-   * its own fullscreen layout may not call the API again to undo it.
+   * Leave the view when the player's own control is pressed. Bound only while
+   * it is open; entering is the main world's job. A player that switched to its
+   * own fullscreen layout may not call the API again to undo it.
    */
   function onFsControlClick(e) {
     const el = fsControlFrom(e.target);
@@ -605,10 +566,8 @@
     }
   }
 
-  // A navigation inside the frame throws away the element we promoted.
-  // Full teardown, not just dropping the reference: a page restored from
-  // bfcache would otherwise come back still blacked out, with a dead Exit
-  // button, because exitTheater() returns early once theater is null.
+  // Full teardown, not just dropping the reference: a bfcache restore would
+  // otherwise come back blacked out with exitTheater() already short-circuited.
   window.addEventListener("pagehide", () => {
     if (theater) exitTheater();
   });
@@ -716,11 +675,9 @@
       const viewport = document.querySelector('meta[name="viewport"]');
       // Can this frame persist the kind of cookie a site actually sets?
       //
-      // The panel embeds sites cross-site, which is a third-party context. A
-      // cookie marked SameSite=None; Secure survives that; a default cookie
-      // (SameSite=Lax), which is what an age gate or consent banner writes,
-      // does not. Testing only the None flavour reports success and hides the
-      // real problem, so both are measured separately.
+      // The panel embeds sites cross-site. SameSite=None; Secure survives that;
+      // a default Lax cookie, which is what an age gate writes, does not.
+      // Testing only None reports success and hides the real problem.
       let cookieLax = false;
       let cookieNone = false;
       try {
@@ -781,10 +738,9 @@
           inTheater: doc.hasAttribute("data-goontek-theater"),
           viewport: viewport ? viewport.content : null,
           readyState: document.readyState,
-          // The decisive fields: what the site actually sees. If the UA is an
-          // iPhone and innerWidth is ~390 but the layout is still desktop, the
-          // site is not deciding layout from either: it is server-side or a
-          // stored preference, and no client-side spoof can change it.
+          // The decisive fields: what the site actually sees. An iPhone UA and
+          // a ~390 innerWidth with a desktop layout means the site decides
+          // server-side or from a stored preference, which no spoof can reach.
           mainWorld,
           seenUA: navigator.userAgent,
           seenUAData: uaData,

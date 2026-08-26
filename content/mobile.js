@@ -40,8 +40,8 @@
   define(navigator, "vendor", "Apple Computer, Inc.");
   define(navigator, "maxTouchPoints", 5);
 
-  // Safari exposes no userAgentData at all. Leaving Chrome's in place next to an
-  // iPhone User-Agent is the single clearest tell, so hide it.
+  // Safari exposes no userAgentData. Chrome's left beside an iPhone UA is the
+  // clearest tell there is.
   define(navigator, "userAgentData", undefined);
 
   // Screen and pixel ratio. Sites that gate on screen.width rather than the
@@ -57,17 +57,15 @@
 
   // Fullscreen interception.
   //
-  // A side panel cannot go fullscreen: a real requestFullscreen either fills
-  // only the narrow panel or is refused, and players that take the iOS path
-  // call video.webkitEnterFullscreen(), which does not exist in desktop Chrome
-  // at all, so the button silently does nothing.
+  // A side panel cannot go fullscreen: a real request either fills only the
+  // narrow panel or is refused, and players taking the iOS path call
+  // video.webkitEnterFullscreen(), which desktop Chrome does not have, so the
+  // button silently does nothing. Route every route to the panel's theater
+  // view instead, via a CustomEvent on the shared document.
   //
-  // Route every route to the panel's theater view instead. The handler lives in
-  // the isolated world, and a CustomEvent on the shared document is the way to
-  // reach it from here.
-  // The element the player asked to fullscreen is the authoritative answer to
-  // "which video". Guessing instead picks the wrong one on pages with an
-  // autoplaying ad. Worlds cannot share objects, so mark it in the DOM.
+  // The element the player asked to fullscreen answers "which video"
+  // authoritatively; guessing picks the ad on pages that autoplay one. Worlds
+  // cannot share objects, so mark it in the DOM.
   const askTheater = (type, target) => {
     try {
       const prev = document.querySelector("[data-goontek-fs-target]");
@@ -155,10 +153,9 @@
   // Isolated world cannot see main-world variables, but both see the DOM.
   try {
     document.documentElement.setAttribute("data-goontek-ua", "1");
-    // Also record what the page-facing navigator now reports. An isolated-world
-    // content script has its own navigator and always reads the real browser
-    // values, so reading it there says nothing about whether this patch worked.
-    // The DOM is the only channel between the two worlds.
+    // Also record what the page-facing navigator now reports. The isolated
+    // world has its own navigator and always reads the real browser, so the
+    // DOM is the only channel that can carry these values across.
     document.documentElement.setAttribute(
       "data-goontek-seen",
       JSON.stringify({
@@ -188,8 +185,7 @@
   else document.addEventListener("DOMContentLoaded", setViewport, { once: true });
 
   // Some sites rewrite the viewport meta to a fixed desktop width when their
-  // JavaScript switches to a desktop layout after load. Watch for that and put
-  // the mobile viewport back. Cheap: one observer, only reacting to head changes.
+  // JavaScript switches layout after load. Put the mobile viewport back.
   const guardViewport = () => {
     if (!document.head) return;
     new MutationObserver(setViewport).observe(document.head, {

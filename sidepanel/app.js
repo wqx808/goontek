@@ -274,10 +274,9 @@ window.addEventListener("message", (event) => {
     const required = Number(msg.required);
     if (!Number.isFinite(required) || required < 200) return;
     const prev = fits.get(id) || 0;
-    // Take the first report, or a substantially larger one. A large jump means
-    // the page genuinely grew (typically a site switching itself to a desktop
-    // layout after load), which we do want to react to. Small changes are
-    // re-measurement wobble and are ignored, so the fit does not oscillate.
+    // First report, or a substantially larger one: a large jump means the page
+    // genuinely grew. Small changes are re-measurement wobble, so ignoring them
+    // stops the fit oscillating.
     if (prev && required <= prev * 1.25) return;
     fits.set(id, required);
     applyFit(id);
@@ -301,11 +300,9 @@ function targetWidth(id) {
 
   const forced = Number(config.width);
   const reported = fits.get(id) || 0;
-  // Phone mode normally pins the layout to the forced width. But if the page
-  // turns out dramatically wider (a site that switched itself to a desktop
-  // layout after load, defeating the narrow viewport), fit that real width
-  // instead of clipping it. The page is then all visible, just small, which
-  // beats a cropped column with a horizontal scrollbar.
+  // If the page turns out dramatically wider (a site that switched itself to a
+  // desktop layout after load), fit that real width rather than clip it. All
+  // visible and small beats a cropped column.
   if (reported > forced * 1.8) return reported;
   return forced;
 }
@@ -341,10 +338,9 @@ function applyFit(id, box) {
 }
 
 /**
- * The in-page controls live inside the frame, so the frame's zoom scales them
- * too: oversized under a phone width, unreadable under a desktop one. Telling
- * the frame its scale lets the content script cancel it out for those controls
- * only, so they stay one size whatever the page is laid out at.
+ * The in-page controls live inside the frame, so its zoom scales them too.
+ * Telling the frame its scale lets the content script cancel that out for those
+ * controls, keeping them one size at any layout width.
  */
 function tellScale(frame, scale) {
   try {
@@ -505,14 +501,10 @@ function renderFavStar() {
   btn.disabled = !url;
 }
 
-// The list drops from the address bar rather than holding a row open all the
-// time. Two ways in, because focusing the address bar is not discoverable on
-// its own: the star in the utility row opens it whenever you want it.
-//
-// The two behave differently on purpose. Focusing the address bar is a glance,
-// so the list gets out of the way as soon as you look elsewhere. Pressing the
-// star is a decision, so it stays until you press it again. Otherwise the first
-// click into the page closes what you deliberately opened.
+// The list drops from the address bar rather than holding a row open. Two ways
+// in, since address-bar focus is not discoverable on its own. They differ on
+// purpose: focus is a glance, so the list closes when you look elsewhere; the
+// star is a decision, so it stays until pressed again.
 let favPinned = false;
 
 function showFavourites(on) {
@@ -595,10 +587,7 @@ function renderFavourites() {
   renderFavGrid();
 }
 
-/**
- * The same favourites, laid out for an empty tab. A new tab is the moment you
- * are most likely to want one, and the stage is otherwise doing nothing.
- */
+/** The same favourites as tiles, for an empty tab. */
 function renderFavGrid() {
   const grid = $("favgrid");
   grid.textContent = "";
@@ -802,12 +791,10 @@ chrome.runtime.onMessage.addListener((msg) => {
 });
 
 /**
- * Close the panel and leave a rail in the page to bring it back.
- *
- * Nothing is merely covered. The panel document is destroyed, which stops every
- * frame outright and gives the page its width back. Tabs live in session
- * storage, so opening the panel again restores them; history is scrubbed first
- * because it is the only trace that would outlive the panel.
+ * Close the panel and leave a rail in the page to bring it back. The document
+ * is destroyed, which stops every frame and gives the page its width back.
+ * Tabs live in session storage, so reopening restores them; history is scrubbed
+ * first because it is the only trace that outlives the panel.
  */
 let collapsing = false;
 async function collapse() {

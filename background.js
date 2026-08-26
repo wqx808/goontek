@@ -16,10 +16,9 @@ const RULE_ADBLOCK_MEDIA = 4;
 const SCRIPT_MOBILE = "goontek-mobile";
 const SCRIPT_PANEL = "goontek-panel";
 
-// iOS Safari rather than Android Chrome. Sites that serve a good mobile layout
-// are overwhelmingly tested against iPhone Safari, and it is a more consistent
-// disguise: Safari sends no Sec-CH-UA hints and exposes no navigator.userAgentData,
-// so there is no Chrome-shaped evidence left behind to contradict the UA.
+// iOS Safari rather than Android Chrome: sites with a good mobile layout are
+// overwhelmingly tested against iPhone Safari, and Safari sends no Sec-CH-UA
+// hints and no navigator.userAgentData, so nothing contradicts the UA.
 const MOBILE_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 " +
   "(KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
@@ -106,10 +105,9 @@ chrome.commands.onCommand.addListener(async (command) => {
 
 // ------------------------------------------------------------- collapse
 //
-// Hiding closes the side panel outright so the page gets its width back. The
-// only thing left behind is a rail injected into the page, which asks to open
-// the panel again. The flag lives in session storage because the worker is
-// evicted whenever it goes idle.
+// Hiding closes the panel outright so the page gets its width back, leaving a
+// rail injected into the page to open it again. The flag lives in session
+// storage because the worker is evicted whenever it goes idle.
 
 const COLLAPSED_KEY = "goontek:collapsed";
 
@@ -119,12 +117,9 @@ async function isCollapsed() {
 }
 
 /**
- * Draw the rail on one tab, and report whether it took.
- *
- * No extension can inject into chrome:// and brave:// pages, the Web Store, or
- * the PDF viewer, so on those there is nowhere to put a rail at all. The badge
- * is the fallback: it is drawn on the toolbar icon, which is outside the page
- * and therefore always available.
+ * Draw the rail on one tab, and report whether it took. No extension can inject
+ * into browser pages, the Web Store or the PDF viewer, so there the badge on
+ * the toolbar icon is the only affordance available.
  */
 async function showRail(tabId) {
   try {
@@ -165,18 +160,16 @@ async function collapse() {
   await chrome.storage.session.set({ [COLLAPSED_KEY]: true }).catch(() => {});
   markCollapsed(true);
 
-  // Every tab in the window, not just the active one. If the active tab is a
-  // browser page the rail cannot be drawn there at all, and this way switching
-  // to any ordinary tab already has one waiting.
+  // Every tab in the window, not just the active one: a browser page cannot
+  // take a rail at all, so any ordinary tab already has one waiting.
   const tabs = await chrome.tabs.query({ lastFocusedWindow: true }).catch(() => []);
   await Promise.all(tabs.map((tab) => showRail(tab.id)));
 }
 
 /**
- * open() has to be called in a user gesture. A click on the rail is one, but
- * the gesture belongs to the page's renderer and does not always survive the
- * hop into the worker. When it does not, say so rather than doing nothing: the
- * caller leaves the rail up and shows the shortcut instead.
+ * open() has to run in a user gesture. A click on the rail is one, but the
+ * gesture belongs to the page and does not always survive the hop to the
+ * worker. Report failure so the caller can show the shortcut instead.
  */
 async function reopen(tabId) {
   try {
@@ -191,8 +184,8 @@ async function reopen(tabId) {
   return true;
 }
 
-// A page navigation wipes the injected rail, and a tab the user switches to
-// never had one. Redraw so the way back is always on screen while collapsed.
+// A navigation wipes the injected rail, and a newly activated tab never had
+// one. Redraw so the way back is always on screen while collapsed.
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   if (await isCollapsed()) showRail(tabId);
 });

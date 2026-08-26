@@ -1,12 +1,11 @@
-// The reopen rail, drawn in the page while the side panel is closed.
+// The reopen rail, injected into the page while the side panel is closed.
 //
-// Hiding the panel closes it outright, so the browser gives the page its full
-// width back. Nothing of the panel survives to draw a control, which is why
-// this is injected into the page instead: a slim tab on the right edge that
+// Hiding closes the panel outright, so nothing of it survives to draw a
+// control. This is that control: a slim tab on the page's right edge which
 // asks the worker to open the panel again.
 //
-// Injected on demand by background.js, so it is not a declared content script
-// and never runs on a page unless the panel is collapsed.
+// Injected on demand by background.js rather than declared as a content
+// script, so it never runs unless the panel is collapsed.
 
 (() => {
   const ID = "goontek-reopen-rail";
@@ -16,10 +15,8 @@
   const host = document.createElement("div");
   host.id = ID;
 
-  // The host carries the positioning, set !important in the page's own cascade
-  // so a site rule cannot move it. Putting it here rather than on a child means
-  // a page that transforms <html> (which would trap a fixed-position
-  // descendant) still cannot pull the rail out of the viewport.
+  // Positioning on the host, !important in the page cascade, so a site rule
+  // cannot move it and a transformed <html> cannot trap it.
   for (const [prop, value] of Object.entries({
     position: "fixed",
     top: "50%",
@@ -83,9 +80,8 @@
   const SHORTCUT = isMac ? "⌘⇧Space" : "Ctrl+Shift+Space";
 
   button.addEventListener("click", async () => {
-    // The click is the user gesture sidePanel.open() needs. The gesture belongs
-    // to this page though, and does not always survive the hop to the worker;
-    // when the browser refuses, fall back to telling the user the shortcut.
+    // The click is the user gesture sidePanel.open() needs, but it belongs to
+    // this page and may not survive the hop to the worker.
     const res = await chrome.runtime
       .sendMessage({ type: "goontek:reopen" })
       .catch(() => null);
