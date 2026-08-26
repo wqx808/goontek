@@ -11,6 +11,7 @@
 const RULE_FRAME_HEADERS = 1;
 const RULE_MOBILE_UA = 2;
 const RULE_ADBLOCK = 3;
+const RULE_ADBLOCK_MEDIA = 4;
 
 const SCRIPT_MOBILE = "goontek-mobile";
 const SCRIPT_PANEL = "goontek-panel";
@@ -381,13 +382,13 @@ async function syncRules() {
       condition: {
         requestDomains: domains,
         // main_frame is excluded so a blocked domain can never strand a
-        // top-level navigation on a blank page.
+        // top-level navigation on a blank page. media is excluded because a
+        // dead media request hangs the player: see RULE_ADBLOCK_MEDIA.
         resourceTypes: [
           "sub_frame",
           "script",
           "image",
           "xmlhttprequest",
-          "media",
           "font",
           "stylesheet",
           "ping",
@@ -396,10 +397,24 @@ async function syncRules() {
         ],
       },
     });
+
+    // A video player treats a blocked pre-roll as a request still in flight and
+    // waits for it, which leaves the real video stalled with its audio running.
+    // Answering with an empty file instead makes the media element fail
+    // immediately, so the player gives up on the ad and moves on.
+    addRules.push({
+      id: RULE_ADBLOCK_MEDIA,
+      priority: 2,
+      action: {
+        type: "redirect",
+        redirect: { extensionPath: "/rules/noop.mp4" },
+      },
+      condition: { requestDomains: domains, resourceTypes: ["media"] },
+    });
   }
 
   await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: [RULE_FRAME_HEADERS, RULE_MOBILE_UA, RULE_ADBLOCK],
+    removeRuleIds: [RULE_FRAME_HEADERS, RULE_MOBILE_UA, RULE_ADBLOCK, RULE_ADBLOCK_MEDIA],
     addRules,
   });
 }

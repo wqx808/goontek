@@ -11,7 +11,9 @@
     "scripting",
     "declarativeNetRequest"
   ],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "side_panel": {
     "default_path": "sidepanel/index.html"
   },
@@ -49,5 +51,15 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "rules/noop.mp4"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
 }
