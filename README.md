@@ -113,7 +113,6 @@ third-party, and browsers refuse the ordinary (`SameSite=Lax`) cookies those
 prompts write. Manifest V3 gives an extension no way to rewrite `Set-Cookie`.
 Either allow third-party cookies for that site (Chrome: Settings → Privacy →
 Third-party cookies; Brave: Shields → Cookies), or open it in a browser tab.
-Diagnostics confirms it: *normal cookie (SameSite=Lax)* reads `false`.
 
 **A site stays on its desktop layout.** Some decide from a preference stored the
 first time you visited in a normal tab. **Request mobile version of this site**
